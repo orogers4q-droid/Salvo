@@ -1,0 +1,100 @@
+/* VOICE everyday: a reading site for military sci-fi and fantasy serials
+   IDEA a field-issue dossier: olive drab covers, stencil lettering, signal-orange markings
+   PICTURE the featured story's cover scene (dropships over a planet) large in the olive hero
+   COLOUR olive drab field, sand support, signal orange accent, white reading ground
+   TYPE Saira Stencil One display + Barlow UI + Source Serif 4 for chapter text
+   LAYOUT laptop: olive hero with story + cover, list and sidebar below; phone: stacked */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#121510);--ink:light-dark(#1b1f16,#e9ecdf);--olive:light-dark(#3d4b2b,#26301c);--sand:light-dark(#e6e0c6,#e6e0c6);--sig:#e4572e;--mute:light-dark(#5d6452,#a3aa95);--line:light-dark(#dcddd3,#2f3428);--card:light-dark(#f4f5ef,#1a1e16)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Barlow,system-ui,sans-serif;overflow-x:clip}
+a{color:inherit}
+button,input,textarea,select{font:inherit;font-size:16px}
+.band{padding:clamp(22px,4vw,56px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+header{background:var(--olive);color:var(--sand);padding:10px max(5vw,16px);position:sticky;top:0;z-index:5}
+header .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
+.logo{font:32px/1 'Saira Stencil One',Impact,sans-serif;text-decoration:none;color:var(--sand);margin-right:auto}
+.logo b{color:var(--sig);font-weight:400}
+nav{display:flex;flex-wrap:wrap;gap:4px}
+nav a{text-decoration:none;padding:10px 12px;border-radius:6px;font-weight:600}
+nav a:hover,nav a.on{background:rgba(255,255,255,.12)}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:6px;border:2px solid transparent;background:var(--sig);color:#fff;font-weight:700;cursor:pointer;text-decoration:none}
+.btn.ghost{background:transparent;border-color:currentColor;color:inherit}
+.btn:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--sig);outline-offset:2px}
+.hero{background:var(--olive);color:var(--sand)}
+.hero .wrap{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:clamp(20px,4vw,56px);align-items:center}
+.hero h1{font:clamp(36px,5vw,52px)/1.05 'Saira Stencil One',Impact,sans-serif;margin:6px 0 10px;letter-spacing:-.01em;text-wrap:balance}
+.kicker{font-weight:600;color:var(--sig)}
+.hero p{max-width:56ch;font-size:17px;margin:0 0 18px;opacity:.92}
+.cover{display:block;width:100%;aspect-ratio:3/4;border-radius:8px;overflow:hidden;box-shadow:0 2px 0 rgba(0,0,0,.25)}
+.hero .cover{max-height:440px;width:auto;margin-left:auto}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 22px}
+.chip{min-height:40px;padding:0 14px;border-radius:20px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;font-weight:600}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:32px;align-items:start}
+h2{font:28px/1.1 'Saira Stencil One',Impact,sans-serif;margin:0 0 14px}
+.list{display:grid;gap:12px}
+.item{display:grid;grid-template-columns:72px minmax(0,1fr);gap:14px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--card);text-decoration:none}
+.item:hover{border-color:var(--mute)}
+.item .cover{border-radius:4px}
+.item h3{margin:0;font-size:19px;line-height:1.2}
+.meta{color:var(--mute);font-size:14px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tag{font-size:13px;font-weight:600;padding:2px 8px;border-radius:4px;background:var(--sand);color:#2a3120}
+.side{display:grid;gap:18px}
+.panel{border:1px solid var(--line);border-radius:8px;padding:16px;background:var(--card)}
+.rank{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;padding:8px 0;border-top:1px solid var(--line);text-decoration:none;align-items:baseline}
+.rank:first-of-type{border-top:0}
+.rank b{font:20px 'Saira Stencil One',sans-serif;color:var(--sig)}
+.num{white-space:nowrap;font-variant-numeric:tabular-nums}
+.ad{border:1.5px dashed var(--mute);border-radius:8px;padding:18px;text-align:center;color:var(--mute);font-size:14px}
+.ad strong{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+.sgrid{display:grid;grid-template-columns:260px minmax(0,1fr);gap:clamp(20px,4vw,48px);align-items:start}
+.chap{display:flex;justify-content:space-between;gap:12px;padding:12px 4px;border-top:1px solid var(--line);text-decoration:none}
+.chap:hover{color:var(--sig)}
+.reader{max-width:700px;margin:0 auto}
+.reader h1{font:clamp(30px,4vw,42px)/1.08 'Saira Stencil One',Impact,sans-serif;margin:4px 0 20px}
+.prose{font-family:'Source Serif 4',Georgia,serif;line-height:1.7}
+.prose p{margin:0 0 1.1em}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 20px}
+.pager{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;margin:28px 0}
+.cmt{border-top:1px solid var(--line);padding:12px 0}
+form{display:grid;gap:14px}
+label{display:grid;gap:6px;font-weight:600}
+input,textarea,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+textarea{min-height:150px;resize:vertical}
+.checks{display:flex;flex-wrap:wrap;gap:8px 16px;font-weight:500}
+.checks label{display:flex;gap:6px;align-items:center;font-weight:500}
+.checks input{width:auto}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:32px;align-items:start}
+.note{color:var(--mute);font-size:14px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:8px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+#modal{position:fixed;inset:0;background:rgba(10,12,8,.6);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+#modal.open{display:flex}
+.box{background:var(--bg);color:var(--ink);border-radius:10px;padding:24px;max-width:440px;width:100%;display:grid;gap:14px}
+.box h2{margin:0}
+footer{background:var(--olive);color:var(--sand);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
+@media(prefers-reduced-motion:reduce){.toast{transition:none}}
+@media(max-width:820px){.cols,.sgrid{grid-template-columns:minmax(0,1fr)}.sgrid .cover{max-width:220px}}
+@media(max-width:600px){.hero .wrap{grid-template-columns:minmax(0,1fr)}.hero .cover{max-height:300px;margin:0}.logo{font-size:26px}nav a{padding:10px 8px}}
+.signin{max-width:460px}
+.loading{padding:60px 0;text-align:center;color:var(--mute)}
+.page{font:clamp(32px,4vw,46px)/1.05 'Saira Stencil One',Impact,sans-serif;margin:0 0 16px;text-wrap:balance}
+.hero-meta{color:inherit;opacity:.8;margin-bottom:18px}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+.gap{margin-bottom:24px}
+.tight{margin:0 0 12px}
+.blurb{font-size:17px;max-width:62ch}
+.mt{margin-top:20px}
+.inad{margin:0 0 1.1em;font-family:Barlow,sans-serif}
+textarea.short{min-height:100px}
+textarea.tall{min-height:260px}
+.narrow{max-width:760px}
+fieldset{border:0;padding:0;margin:0}
+legend{font-weight:600;margin-bottom:6px;padding:0}
+.btn:disabled{opacity:.6;cursor:wait}
+.reader .row .btn{flex:none}
