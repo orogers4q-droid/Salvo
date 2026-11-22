@@ -20,7 +20,7 @@
     const find = (id) => all().find((s) => s.id === id);
     return {
       live: false,
-      async user() { return { id: "me", pen: U.me.pen || "You", email: "demo" }; },
+      async user() { return { id: "me", pen: U.me.pen || "You", email: "demo", admin: true }; },
       onAuth() {},
       async signIn() { return "Demo mode: you're already signed in."; },
       async signOut() {},
@@ -38,6 +38,13 @@
       async createStory(d) { const s = { id: "u" + Date.now().toString(36), author: U.me.pen || "You", followers: 0, updated: new Date().toISOString(), chapters: [], ...d }; U.mine.unshift(s); save(); return s.id; },
       async addChapter(id, title, body) { const s = U.mine.find((x) => x.id === id); s.chapters.push({ t: title, body }); s.updated = new Date().toISOString(); delete s.ago; save(); return s.chapters.length; },
       async report() {},
+      async stats() {
+        const today = new Date();
+        const daily = [...Array(14)].map((_, i) => { const d = new Date(today - (13 - i) * 864e5); return { day: d.toISOString().slice(0, 10), n: i === 13 ? 1 : 0 }; });
+        const cm = Object.values(U.comments).reduce((a, c) => a + c.length, 0);
+        return { accounts: 1, authors: U.mine.length ? 1 : 0, stories: all().length, chapters: all().reduce((a, s) => a + s.chapters.length, 0),
+          comments: cm, follows: U.follows.length, open_reports: 0, new_7d: 1, active_7d: 1, daily, demo: true };
+      },
     };
   }
 
@@ -53,7 +60,8 @@
     async function loadMe(session) {
       if (!session) { me = null; return null; }
       const p = ok(await sb.from("profiles").select("pen_name").eq("id", session.user.id).maybeSingle());
-      me = { id: session.user.id, email: session.user.email, pen: p?.pen_name || "" };
+      const a = await sb.from("admins").select("user_id").eq("user_id", session.user.id).maybeSingle();
+      me = { id: session.user.id, email: session.user.email, pen: p?.pen_name || "", admin: !!a.data };
       return me;
     }
     const need = () => { if (!me) throw new Error("Please sign in first."); return me; };
@@ -103,6 +111,7 @@
         const u = need();
         ok(await sb.from("reports").insert({ reporter_id: u.id, target_type: type, target_id: targetId, reason, details }));
       },
+      async stats() { return ok(await sb.rpc("site_stats")); },
     };
   }
 

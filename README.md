@@ -25,6 +25,16 @@ While `js/config.js` is empty, the site shows sample stories, and anything you p
 3. **Sign-in links:** in Supabase, go to Authentication > URL Configuration. Set the Site URL to the GitHub Pages address and add it under Redirect URLs.
 4. **Connect:** from Supabase > Project Settings > API, copy the Project URL and the `anon` public key into `js/config.js`.
 
+## Stats page
+
+After you've signed up on the live site once, run this in Supabase > SQL Editor, using your own email:
+
+```sql
+insert into admins (user_id) select id from auth.users where email = 'you@example.com';
+```
+
+Once you've done that, a **Stats** link appears in the menu for you and nobody else. It shows accounts, readers, authors, people active this week, and new sign-ups per day.
+
 ## Moderation
 
 Reports go to the `reports` table. To take something down, set `hidden = true` on the story, chapter or comment in Supabase's Table Editor.

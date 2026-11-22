@@ -99,6 +99,18 @@
     return `<section class="band"><div class="wrap narrow">${H1("Read without ads")}<p class="blurb">One small purchase will remove every ad on Salvo, on the website and in the app. Until then, ads help keep the site free.</p><div class="panel"><h2>Coming soon</h2><p class="note tight">Ad-free will launch with the Android app, using Google Play billing there and card payments on the website.</p></div></div></section>`;
   }
 
+  async function stats() {
+    if (!me || !me.admin) return notFound();
+    const x = await DB.stats();
+    const readers = Math.max(0, x.accounts - x.authors);
+    const max = Math.max(1, ...x.daily.map((d) => d.n));
+    const tile = (n, l, sub) => `<div class="stat"><div class="big num">${k(n)}</div><div><b>${l}</b>${sub ? `<div class="meta">${sub}</div>` : ""}</div></div>`;
+    return `<section class="band"><div class="wrap">${H1("Site stats")}<p class="meta">Only you can see this page.${x.demo ? " Demo numbers until the database is connected." : ""}</p>
+    <div class="stats">${tile(x.accounts, "Accounts", `${k(x.new_7d)} new this week`)}${tile(readers, "Readers", "accounts with no stories")}${tile(x.authors, "Authors", "accounts with at least one story")}${tile(x.active_7d, "Active this week", "signed in within 7 days")}</div>
+    <div class="two mt"><div class="panel"><h2>New accounts, last 14 days</h2><div class="bars">${x.daily.map((d) => `<div class="bar"><span class="meta num">${new Date(d.day + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span><span class="track"><span style="width:${(d.n / max) * 100}%"></span></span><span class="num">${d.n}</span></div>`).join("")}</div></div>
+    <div class="panel"><h2>Activity</h2>${[["Stories", x.stories], ["Chapters", x.chapters], ["Comments", x.comments], ["Follows", x.follows], ["Open reports", x.open_reports]].map(([l, n]) => `<div class="rank"><span></span><span>${l}</span><span class="num">${k(n)}</span></div>`).join("")}<button class="btn ghost mt" id="refresh">Refresh</button></div></div></div></section>`;
+  }
+
   const notFound = () => `<section class="band"><div class="wrap">${H1("Not found")}<p>That story or chapter doesn't exist, or was taken down. <a href="#home">Back to browsing</a></p></div></section>`;
 
   function modal(h) { $("mbox").innerHTML = h; $("modal").classList.add("open"); const b = $("mbox").querySelector("select,button"); if (b) b.focus(); }
@@ -112,10 +124,11 @@
     let v = "home", m, job;
     if ((m = h.match(/^read-(.+)-(\d+)$/))) { job = read(m[1], +m[2]); v = ""; }
     else if ((m = h.match(/^story-(.+)$/))) { job = story(m[1]); v = ""; }
-    else if (["library", "write", "signin", "adfree"].includes(h)) { v = h; job = { library, write, signin, adfree }[h](); }
+    else if (["library", "write", "signin", "adfree", "stats"].includes(h)) { v = h; job = { library, write, signin, adfree, stats }[h](); }
     else job = home();
     document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("on", a.dataset.v === v));
     $("navsign").textContent = me ? "Account" : "Sign in";
+    $("navstats").hidden = !(me && me.admin);
     app.setAttribute("aria-busy", "true");
     const slow = setTimeout(() => { if (t === token) app.innerHTML = '<p class="loading">Loading…</p>'; }, 250);
     let html;
@@ -155,6 +168,8 @@
       busy(chf.querySelector("button"), async () => { const n = await DB.addChapter(id, $("ctitle").value.trim(), $("cbody").value.trim()); toast("Chapter " + n + " published"); location.hash = "#read-" + id + "-" + n; }); };
     const inf = $("iform");
     if (inf) inf.onsubmit = (e) => { e.preventDefault(); busy(inf.querySelector("button"), async () => { toast(await DB.signIn($("email").value.trim())); }); };
+    const rf = $("refresh");
+    if (rf) rf.onclick = () => render();
     const so = $("signout");
     if (so) so.onclick = () => busy(so, async () => { await DB.signOut(); me = null; follows = []; location.hash = "#home"; render(); });
   }

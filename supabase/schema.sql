@@ -106,3 +106,35 @@ create policy "own comment delete" on comments for delete using (user_id = auth.
 
 -- Reports can be sent by signed-in people; only you (in the Supabase dashboard) can read them.
 create policy "send report" on reports for insert with check (reporter_id = auth.uid());
+
+-- ---------------- Owner stats ----------------
+-- Only people listed in admins can open the Stats page. Add yourself after you sign up once:
+--   insert into admins (user_id) select id from auth.users where email = 'you@example.com';
+create table admins (user_id uuid primary key references auth.users on delete cascade);
+alter table admins enable row level security;
+create policy "admins see self" on admins for select using (user_id = auth.uid());
+
+create function site_stats() returns json language plpgsql security definer set search_path = public as $$
+declare r json;
+begin
+  if not exists (select 1 from admins where user_id = auth.uid()) then
+    raise exception 'Not allowed';
+  end if;
+  select json_build_object(
+    'accounts',     (select count(*) from auth.users),
+    'authors',      (select count(distinct author_id) from stories),
+    'stories',      (select count(*) from stories),
+    'chapters',     (select count(*) from chapters),
+    'comments',     (select count(*) from comments),
+    'follows',      (select count(*) from follows),
+    'open_reports', (select count(*) from reports where status = 'open'),
+    'new_7d',       (select count(*) from auth.users where created_at > now() - interval '7 days'),
+    'active_7d',    (select count(*) from auth.users where last_sign_in_at > now() - interval '7 days'),
+    'daily', (select json_agg(json_build_object('day', d::date,
+                'n', (select count(*) from auth.users u where u.created_at::date = d::date)) order by d)
+              from generate_series(current_date - 13, current_date, interval '1 day') d)
+  ) into r;
+  return r;
+end $$;
+revoke execute on function site_stats() from public, anon;
+grant execute on function site_stats() to authenticated;

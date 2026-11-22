@@ -98,3 +98,12 @@ fieldset{border:0;padding:0;margin:0}
 legend{font-weight:600;margin-bottom:6px;padding:0}
 .btn:disabled{opacity:.6;cursor:wait}
 .reader .row .btn{flex:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.stat{display:grid;gap:4px;padding:16px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.big{font:clamp(36px,5vw,48px)/1 'Saira Stencil One',Impact,sans-serif;color:var(--sig)}
+.bars{display:grid;gap:6px}
+.bar{display:grid;grid-template-columns:4.5em minmax(0,1fr) 2.5em;gap:10px;align-items:center}
+.bar .num:last-child{text-align:right}
+.track{height:14px;background:var(--line);border-radius:3px;overflow:hidden}
+.track span{display:block;height:100%;background:var(--olive);min-width:2px}
+[hidden]{display:none!important}
