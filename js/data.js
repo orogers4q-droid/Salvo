@@ -53,7 +53,8 @@
     const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
     let me = null;
     const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
-    const COLS = "id,title,blurb,tags,updated_at,author_id,profiles(pen_name),chapters(count),follows(count)";
+    // Name the author link explicitly: follows also connects stories to profiles, so Supabase needs to know which one.
+    const COLS = "id,title,blurb,tags,updated_at,author_id,profiles!stories_author_id_fkey(pen_name),chapters(count),follows(count)";
     const card = (r) => ({ id: r.id, title: r.title, author: r.profiles?.pen_name || "Unknown", tags: r.tags || [], blurb: r.blurb,
       followers: r.follows?.[0]?.count || 0, ago: minsAgo(r.updated_at), chapterCount: r.chapters?.[0]?.count || 0,
       sample: false, mine: !!me && r.author_id === me.id });
