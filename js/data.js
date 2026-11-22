@@ -53,7 +53,7 @@
 
   // ---------------- Supabase backend ----------------
   function supa() {
-    const VERSION = "2026-11-22.3";
+    const VERSION = "2026-11-22.4";
     // What the address bar looked like when the page opened (names only, never the secret values).
     const q = new URLSearchParams(location.search);
     const hq = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -67,8 +67,10 @@
       hashKeys: [...hq.keys()].join(", ") || "none", storage: storageOK ? "ok" : "BLOCKED", verifierBefore: hasVerifier() ? "present" : "missing",
       exchange: "not needed", session: "unknown", linkError: linkError || "none" };
     // The site handles the link itself (detectSessionInUrl off) so every step can be reported.
+    // Implicit flow: the link carries the session, so it works whichever email in the thread is tapped,
+    // even after a rate-limited request, and even in a different browser. (?code= links from before still get handled.)
     const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-      auth: { flowType: "pkce", detectSessionInUrl: false, persistSession: true, autoRefreshToken: true },
+      auth: { flowType: "implicit", detectSessionInUrl: false, persistSession: true, autoRefreshToken: true },
     });
     let me = null, authNote = "", linkDone = null;
     const tidy = (page) => { try { history.replaceState(null, "", location.pathname + page); } catch (e) {} };
