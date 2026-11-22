@@ -165,5 +165,13 @@ end $$;
 revoke execute on function site_stats() from public, anon;
 grant execute on function site_stats() to authenticated;
 
+-- ---------------- API access ----------------
+-- Lets the site's public key reach these tables. The row rules above still decide what each person can see or change.
+grant usage on schema public to anon, authenticated;
+grant select on profiles, stories, chapters, follows, comments to anon, authenticated;
+grant insert, update, delete on profiles, stories, chapters, follows, comments to authenticated;
+grant insert on reports to authenticated;
+grant select on admins to authenticated;
+
 -- Tell the API about the new tables right away.
 notify pgrst, 'reload schema';
