@@ -107,3 +107,4 @@ legend{font-weight:600;margin-bottom:6px;padding:0}
 .track{height:14px;background:var(--line);border-radius:3px;overflow:hidden}
 .track span{display:block;height:100%;background:var(--olive);min-width:2px}
 [hidden]{display:none!important}
+.warn{padding:12px 14px;border-radius:6px;background:color-mix(in srgb,var(--sig) 14%,var(--bg));border:1px solid var(--sig)}

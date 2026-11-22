@@ -23,6 +23,7 @@
       async user() { return { id: "me", pen: U.me.pen || "You", email: "demo", admin: true }; },
       onAuth() {},
       async signIn() { return "Demo mode: you're already signed in."; },
+      takeNote() { return ""; },
       async signOut() {},
       async setPen(p) { U.me.pen = p; save(); },
       async listStories() { return all().map(card).sort((a, b) => a.ago - b.ago); },
@@ -50,8 +51,17 @@
 
   // ---------------- Supabase backend ----------------
   function supa() {
-    const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-    let me = null;
+    // Sign-in links come back as ?code=... (PKCE), so they never collide with the site's #page routing.
+    const q = new URLSearchParams(location.search);
+    const hq = new URLSearchParams(location.hash.replace(/^#/, ""));
+    const linkError = q.get("error_description") || hq.get("error_description");
+    const cameFromLink = q.has("code") || hq.has("access_token") || !!linkError;
+    const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+      auth: { flowType: "pkce", detectSessionInUrl: true, persistSession: true, autoRefreshToken: true },
+    });
+    let me = null, authNote = "";
+    // After the link is handled, tidy the address bar back to a normal page.
+    const tidy = (page) => { try { history.replaceState(null, "", location.pathname + page); } catch (e) {} };
     const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
     // Name the author link explicitly: follows also connects stories to profiles, so Supabase needs to know which one.
     const COLS = "id,title,blurb,tags,updated_at,author_id,profiles!stories_author_id_fkey(pen_name),chapters(count),follows(count)";
@@ -68,7 +78,20 @@
     const need = () => { if (!me) throw new Error("Please sign in first."); return me; };
     return {
       live: true,
-      async user() { const { data } = await sb.auth.getSession(); return loadMe(data.session); },
+      async user() {
+        const { data } = await sb.auth.getSession();
+        const u = await loadMe(data.session);
+        if (cameFromLink) {
+          if (u) { authNote = "You're signed in."; tidy(u.pen ? "#home" : "#write"); }
+          else {
+            authNote = linkError ? "That sign-in link didn't work: " + linkError.replace(/\+/g, " ") + ". Request a new one below."
+              : "That sign-in link didn't work. Open it in the same browser you requested it from, or request a new one below.";
+            tidy("#signin");
+          }
+        }
+        return u;
+      },
+      takeNote() { const n = authNote; authNote = ""; return n; },
       onAuth(fn) { sb.auth.onAuthStateChange((_e, session) => { loadMe(session).then(fn, fn); }); },
       async signIn(email) {
         ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } }));

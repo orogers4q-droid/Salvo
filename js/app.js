@@ -9,10 +9,10 @@
   const ago = (m) => (m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " d ago");
   const k = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
   const H1 = (t) => `<h1 class="page">${esc(t)}</h1>`;
-  let size = 18, filter = "", me = null, follows = [], token = 0, toastT = null;
+  let lastNote = "", size = 18, filter = "", me = null, follows = [], token = 0, toastT = null;
   try { size = +localStorage.getItem("salvo.size") || 18; } catch (e) {}
 
-  const toast = (t) => { const e = $("toast"); e.textContent = t; e.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove("show"), 2400); };
+  const toast = (t) => { const e = $("toast"); e.textContent = t; e.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove("show"), Math.max(2400, t.length * 60)); };
   const hash = (s) => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 2147483647; return h || 7; };
 
   function cover(st) {
@@ -92,7 +92,7 @@
 
   async function signin() {
     if (me) return `<section class="band"><div class="wrap signin">${H1("You're signed in")}<p>${esc(me.pen || me.email)}</p><button class="btn ghost" id="signout">Sign out</button></div></section>`;
-    return `<section class="band"><div class="wrap signin">${H1("Sign in or join")}<form id="iform"><label>Email<input id="email" type="email" required autocomplete="email"></label><button class="btn" type="submit">Email me a sign-in link</button><p class="note">No password. New here? The same link creates your account.</p></form></div></section>`;
+    return `<section class="band"><div class="wrap signin">${H1("Sign in or join")}${lastNote ? `<p class="warn">${esc(lastNote)}</p>` : ""}<form id="iform"><label>Email<input id="email" type="email" required autocomplete="email"></label><button class="btn" type="submit">Email me a sign-in link</button><p class="note">No password. New here? The same link creates your account.</p></form></div></section>`;
   }
 
   async function adfree() {
@@ -179,6 +179,9 @@
   (async () => {
     try { me = await DB.user(); follows = await DB.myFollows(); } catch (e) { console.error(e); }
     if (!DB.live) $("mode").textContent = "Demo mode: posts are saved in this browser only.";
+    const note = DB.takeNote && DB.takeNote();
+    if (note && !me) lastNote = note;
     render();
+    if (note) toast(note);
   })();
 })();
