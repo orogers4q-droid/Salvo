@@ -90,9 +90,25 @@
     <h2 class="mt">Your stories</h2>${mine.map((s) => `<a class="chap" href="#story-${s.id}"><span>${esc(s.title)}</span><span class="meta num">${s.chapterCount} ch · ${k(s.followers)} followers</span></a>`).join("")}` : '<p class="note">Create a story first, then post chapters to it here.</p>'}</form></div></div></section>`;
   }
 
+  function diagBox() {
+    const d = DB.diag && DB.diag();
+    if (!d) return "";
+    const rows = [["Site version", d.version], ["Page opened", d.opened], ["Address had (query)", d.queryKeys], ["Address had (hash)", d.hashKeys],
+      ["Browser storage", d.storage], ["Sign-in key before link", d.verifierBefore], ["Sign-in key now", d.verifierNow],
+      ["Link exchange", d.exchange], ["Session", d.session], ["Error from Supabase", d.linkError]];
+    const text = rows.map(([a, b]) => a + ": " + b).join("\n");
+    return `<details class="panel mt" ${d.queryKeys !== "none" || d.hashKeys !== "none" ? "open" : ""}><summary><b>Sign-in check</b> <span class="meta">for troubleshooting</span></summary>
+      <div class="mt">${rows.map(([a, b]) => `<div class="rank"><span></span><span>${esc(a)}</span><span class="num">${esc(b)}</span></div>`).join("")}</div>
+      <button class="btn ghost mt" type="button" id="copydiag" data-t="${esc(text)}">Copy these details</button></details>`;
+  }
+
   async function signin() {
-    if (me) return `<section class="band"><div class="wrap signin">${H1("You're signed in")}<p>${esc(me.pen || me.email)}</p><button class="btn ghost" id="signout">Sign out</button></div></section>`;
-    return `<section class="band"><div class="wrap signin">${H1("Sign in or join")}${lastNote ? `<p class="warn">${esc(lastNote)}</p>` : ""}<form id="iform"><label>Email<input id="email" type="email" required autocomplete="email"></label><button class="btn" type="submit">Email me a sign-in link</button><p class="note">No password. New here? The same link creates your account.</p></form></div></section>`;
+    if (me) return `<section class="band"><div class="wrap signin">${H1("You're signed in")}<p>${esc(me.pen || me.email)}</p><button class="btn ghost" id="signout">Sign out</button>${diagBox()}</div></section>`;
+    let saved = ""; try { saved = localStorage.getItem("salvo.email") || ""; } catch (e) {}
+    return `<section class="band"><div class="wrap signin">${H1("Sign in or join")}${lastNote ? `<p class="warn">${esc(lastNote)}</p>` : ""}
+    <form id="iform"><label>Email<input id="email" type="email" required autocomplete="email" value="${esc(saved)}"></label><button class="btn" type="submit">Email me a sign-in link</button><p class="note">No password. New here? The same link creates your account. Open the link in this same browser.</p></form>
+    <form id="codeform" class="mt"><label>Got a code in the email instead?<input id="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10" required placeholder="6-digit code"></label><button class="btn ghost" type="submit">Sign in with code</button></form>
+    ${diagBox()}</div></section>`;
   }
 
   async function adfree() {
@@ -170,6 +186,11 @@
     if (inf) inf.onsubmit = (e) => { e.preventDefault(); busy(inf.querySelector("button"), async () => { toast(await DB.signIn($("email").value.trim())); }); };
     const rf = $("refresh");
     if (rf) rf.onclick = () => render();
+    const cd = $("copydiag");
+    if (cd) cd.onclick = async () => { try { await navigator.clipboard.writeText(cd.dataset.t); toast("Copied. Paste it to Claude."); } catch (e) { toast("Couldn't copy. Take a screenshot instead."); } };
+    const cof = $("codeform");
+    if (cof) cof.onsubmit = (e) => { e.preventDefault(); const em = $("email").value.trim(); if (!em) { toast("Enter your email above first"); return; }
+      busy(cof.querySelector("button"), async () => { me = await DB.verifyCode(em, $("otp").value.trim()); follows = await DB.myFollows(); lastNote = ""; toast(me ? "You're signed in." : "That code didn't work"); location.hash = me && !me.pen ? "#write" : "#home"; render(); }); };
     const so = $("signout");
     if (so) so.onclick = () => busy(so, async () => { await DB.signOut(); me = null; follows = []; location.hash = "#home"; render(); });
   }

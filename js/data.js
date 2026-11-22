@@ -24,6 +24,8 @@
       onAuth() {},
       async signIn() { return "Demo mode: you're already signed in."; },
       takeNote() { return ""; },
+      diag() { return null; },
+      async verifyCode() { return this.user(); },
       async signOut() {},
       async setPen(p) { U.me.pen = p; save(); },
       async listStories() { return all().map(card).sort((a, b) => a.ago - b.ago); },
@@ -51,17 +53,34 @@
 
   // ---------------- Supabase backend ----------------
   function supa() {
-    // Sign-in links come back as ?code=... (PKCE), so they never collide with the site's #page routing.
+    const VERSION = "2026-11-22.3";
+    // What the address bar looked like when the page opened (names only, never the secret values).
     const q = new URLSearchParams(location.search);
     const hq = new URLSearchParams(location.hash.replace(/^#/, ""));
     const linkError = q.get("error_description") || hq.get("error_description");
-    const cameFromLink = q.has("code") || hq.has("access_token") || !!linkError;
+    const code = q.get("code");
+    const implicit = hq.get("access_token") && hq.get("refresh_token") ? { access_token: hq.get("access_token"), refresh_token: hq.get("refresh_token") } : null;
+    const cameFromLink = !!(code || implicit || linkError);
+    const storageOK = (() => { try { localStorage.setItem("salvo.t", "1"); localStorage.removeItem("salvo.t"); return true; } catch (e) { return false; } })();
+    const hasVerifier = () => { try { return Object.keys(localStorage).some((k) => k.endsWith("-code-verifier")); } catch (e) { return false; } };
+    const diag = { version: VERSION, opened: new Date().toLocaleTimeString(), queryKeys: [...q.keys()].join(", ") || "none",
+      hashKeys: [...hq.keys()].join(", ") || "none", storage: storageOK ? "ok" : "BLOCKED", verifierBefore: hasVerifier() ? "present" : "missing",
+      exchange: "not needed", session: "unknown", linkError: linkError || "none" };
+    // The site handles the link itself (detectSessionInUrl off) so every step can be reported.
     const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-      auth: { flowType: "pkce", detectSessionInUrl: true, persistSession: true, autoRefreshToken: true },
+      auth: { flowType: "pkce", detectSessionInUrl: false, persistSession: true, autoRefreshToken: true },
     });
-    let me = null, authNote = "";
-    // After the link is handled, tidy the address bar back to a normal page.
+    let me = null, authNote = "", linkDone = null;
     const tidy = (page) => { try { history.replaceState(null, "", location.pathname + page); } catch (e) {} };
+    async function handleLink() {
+      if (code) {
+        const { data, error } = await sb.auth.exchangeCodeForSession(code);
+        diag.exchange = error ? "failed: " + error.message : data?.session ? "ok" : "no session returned";
+      } else if (implicit) {
+        const { data, error } = await sb.auth.setSession(implicit);
+        diag.exchange = error ? "failed (token link): " + error.message : data?.session ? "ok (token link)" : "no session (token link)";
+      }
+    }
     const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
     // Name the author link explicitly: follows also connects stories to profiles, so Supabase needs to know which one.
     const COLS = "id,title,blurb,tags,updated_at,author_id,profiles!stories_author_id_fkey(pen_name),chapters(count),follows(count)";
@@ -86,17 +105,27 @@
     return {
       live: true,
       async user() {
-        const { data } = await sb.auth.getSession();
+        if (cameFromLink && !linkDone) linkDone = handleLink().catch((e) => { diag.exchange = "crashed: " + e.message; });
+        if (linkDone) await linkDone;
+        const { data, error } = await sb.auth.getSession();
+        diag.session = error ? "error: " + error.message : data.session ? "signed in as " + data.session.user.email : "none";
         const u = await loadMe(data.session);
-        if (cameFromLink) {
+        if (cameFromLink && !diag.noted) {
+          diag.noted = true;
           if (u) { authNote = "You're signed in."; tidy(u.pen ? "#home" : "#write"); }
           else {
-            authNote = linkError ? "That sign-in link didn't work: " + linkError.replace(/\+/g, " ") + ". Request a new one below."
-              : "That sign-in link didn't work. Open it in the same browser you requested it from, or request a new one below.";
+            authNote = linkError ? "That sign-in link didn't work: " + linkError.replace(/\+/g, " ") + "."
+              : diag.exchange.startsWith("failed") ? "That sign-in link didn't work (" + diag.exchange.replace(/^failed: /, "") + ")."
+              : "That sign-in link didn't work.";
             tidy("#signin");
           }
         }
         return u;
+      },
+      diag() { return { ...diag, verifierNow: hasVerifier() ? "present" : "missing" }; },
+      async verifyCode(email, token) {
+        ok(await sb.auth.verifyOtp({ email, token, type: "email" }));
+        return this.user();
       },
       takeNote() { const n = authNote; authNote = ""; return n; },
       onAuth(fn) {
@@ -106,6 +135,7 @@
         });
       },
       async signIn(email) {
+        try { localStorage.setItem("salvo.email", email); } catch (e) {}
         ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } }));
         return "Check your email for a sign-in link.";
       },
