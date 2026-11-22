@@ -70,9 +70,16 @@
       sample: false, mine: !!me && r.author_id === me.id });
     async function loadMe(session) {
       if (!session) { me = null; return null; }
-      const p = ok(await sb.from("profiles").select("pen_name").eq("id", session.user.id).maybeSingle());
-      const a = await sb.from("admins").select("user_id").eq("user_id", session.user.id).maybeSingle();
-      me = { id: session.user.id, email: session.user.email, pen: p?.pen_name || "", admin: !!a.data };
+      // A signed-in session counts as signed in even if these extra lookups fail.
+      me = { id: session.user.id, email: session.user.email, pen: "", admin: false };
+      const [p, a] = await Promise.all([
+        sb.from("profiles").select("pen_name").eq("id", session.user.id).maybeSingle(),
+        sb.from("admins").select("user_id").eq("user_id", session.user.id).maybeSingle(),
+      ]);
+      if (p.error) console.warn("Profile lookup failed:", p.error.message);
+      if (a.error) console.warn("Owner lookup failed:", a.error.message);
+      me.pen = p.data?.pen_name || "";
+      me.admin = !!a.data;
       return me;
     }
     const need = () => { if (!me) throw new Error("Please sign in first."); return me; };
@@ -92,7 +99,12 @@
         return u;
       },
       takeNote() { const n = authNote; authNote = ""; return n; },
-      onAuth(fn) { sb.auth.onAuthStateChange((_e, session) => { loadMe(session).then(fn, fn); }); },
+      onAuth(fn) {
+        sb.auth.onAuthStateChange((_e, session) => {
+          // Run outside the auth callback (supabase-js advises against awaiting queries inside it).
+          setTimeout(() => loadMe(session).then(fn, (e) => { console.warn(e); fn(session ? me : null); }), 0);
+        });
+      },
       async signIn(email) {
         ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } }));
         return "Check your email for a sign-in link.";
