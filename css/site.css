@@ -110,3 +110,5 @@ legend{font-weight:600;margin-bottom:6px;padding:0}
 .warn{padding:12px 14px;border-radius:6px;background:color-mix(in srgb,var(--sig) 14%,var(--bg));border:1px solid var(--sig)}
 summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .rank .num{overflow-wrap:anywhere;white-space:normal;text-align:right}
+.log{margin:6px 0 0;padding-left:1.4em;font-size:14px;color:var(--mute)}
+.log li{overflow-wrap:anywhere;margin:2px 0}

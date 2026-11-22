@@ -53,7 +53,7 @@
 
   // ---------------- Supabase backend ----------------
   function supa() {
-    const VERSION = "2026-11-22.4";
+    const VERSION = "2026-11-22.5";
     // What the address bar looked like when the page opened (names only, never the secret values).
     const q = new URLSearchParams(location.search);
     const hq = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -63,6 +63,14 @@
     const cameFromLink = !!(code || implicit || linkError);
     const storageOK = (() => { try { localStorage.setItem("salvo.t", "1"); localStorage.removeItem("salvo.t"); return true; } catch (e) { return false; } })();
     const hasVerifier = () => { try { return Object.keys(localStorage).some((k) => k.endsWith("-code-verifier")); } catch (e) { return false; } };
+    // A small log that survives reloads, so we can see what happened to a session between page loads.
+    const LOG = "salvo.authlog";
+    const log = (msg) => { try { const l = JSON.parse(localStorage.getItem(LOG) || "[]"); l.push(new Date().toLocaleTimeString() + " " + msg); localStorage.setItem(LOG, JSON.stringify(l.slice(-14))); } catch (e) {} };
+    const readLog = () => { try { return JSON.parse(localStorage.getItem(LOG) || "[]"); } catch (e) { return []; } };
+    const savedSession = () => { try { const k = Object.keys(localStorage).find((x) => /^sb-.*-auth-token$/.test(x)); if (!k) return "none";
+      const v = JSON.parse(localStorage.getItem(k)); const exp = v?.expires_at ? new Date(v.expires_at * 1000).toLocaleTimeString() : "?";
+      return "yes (" + (v?.user?.email || "no email") + ", expires " + exp + (v?.refresh_token ? ", has refresh" : ", NO refresh") + ")"; } catch (e) { return "unreadable"; } };
+    log("page load v" + VERSION + " · saved session: " + savedSession() + (location.search || location.hash ? " · address had " + [...new URLSearchParams(location.search).keys(), ...new URLSearchParams(location.hash.replace(/^#/, "")).keys()].filter((k) => k !== "access_token" && k !== "refresh_token").join("/") + (location.hash.includes("access_token") ? "/tokens" : "") : ""));
     const diag = { version: VERSION, opened: new Date().toLocaleTimeString(), queryKeys: [...q.keys()].join(", ") || "none",
       hashKeys: [...hq.keys()].join(", ") || "none", storage: storageOK ? "ok" : "BLOCKED", verifierBefore: hasVerifier() ? "present" : "missing",
       exchange: "not needed", session: "unknown", linkError: linkError || "none" };
@@ -70,7 +78,7 @@
     // Implicit flow: the link carries the session, so it works whichever email in the thread is tapped,
     // even after a rate-limited request, and even in a different browser. (?code= links from before still get handled.)
     const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-      auth: { flowType: "implicit", detectSessionInUrl: false, persistSession: true, autoRefreshToken: true },
+      auth: { flowType: "implicit", detectSessionInUrl: false, persistSession: true, autoRefreshToken: true, storage: window.localStorage },
     });
     let me = null, authNote = "", linkDone = null;
     const tidy = (page) => { try { history.replaceState(null, "", location.pathname + page); } catch (e) {} };
@@ -78,9 +86,11 @@
       if (code) {
         const { data, error } = await sb.auth.exchangeCodeForSession(code);
         diag.exchange = error ? "failed: " + error.message : data?.session ? "ok" : "no session returned";
+        log("code link: " + diag.exchange);
       } else if (implicit) {
         const { data, error } = await sb.auth.setSession(implicit);
         diag.exchange = error ? "failed (token link): " + error.message : data?.session ? "ok (token link)" : "no session (token link)";
+        log("link: " + diag.exchange + " · saved now: " + savedSession());
       }
     }
     const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
@@ -111,6 +121,7 @@
         if (linkDone) await linkDone;
         const { data, error } = await sb.auth.getSession();
         diag.session = error ? "error: " + error.message : data.session ? "signed in as " + data.session.user.email : "none";
+        log("session check: " + diag.session);
         const u = await loadMe(data.session);
         if (cameFromLink && !diag.noted) {
           diag.noted = true;
@@ -124,7 +135,7 @@
         }
         return u;
       },
-      diag() { return { ...diag, verifierNow: hasVerifier() ? "present" : "missing" }; },
+      diag() { return { ...diag, verifierNow: hasVerifier() ? "present" : "missing", saved: savedSession(), log: readLog() }; },
       async verifyCode(email, token) {
         ok(await sb.auth.verifyOtp({ email, token, type: "email" }));
         return this.user();
@@ -132,6 +143,7 @@
       takeNote() { const n = authNote; authNote = ""; return n; },
       onAuth(fn) {
         sb.auth.onAuthStateChange((_e, session) => {
+          log("event " + _e + (session ? " (session)" : " (no session)"));
           // Run outside the auth callback (supabase-js advises against awaiting queries inside it).
           setTimeout(() => loadMe(session).then(fn, (e) => { console.warn(e); fn(session ? me : null); }), 0);
         });
@@ -141,7 +153,7 @@
         ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } }));
         return "Check your email for a sign-in link.";
       },
-      async signOut() { await sb.auth.signOut(); me = null; },
+      async signOut() { log("signed out by the Sign out button"); await sb.auth.signOut(); me = null; },
       async setPen(pen) { const u = need(); ok(await sb.from("profiles").upsert({ id: u.id, pen_name: pen })); u.pen = pen; },
       async listStories() { return ok(await sb.from("stories").select(COLS).order("updated_at", { ascending: false }).limit(100)).map(card); },
       async getStory(id) {

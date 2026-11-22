@@ -95,10 +95,11 @@
     if (!d) return "";
     const rows = [["Site version", d.version], ["Page opened", d.opened], ["Address had (query)", d.queryKeys], ["Address had (hash)", d.hashKeys],
       ["Browser storage", d.storage], ["Sign-in key before link", d.verifierBefore], ["Sign-in key now", d.verifierNow],
-      ["Link exchange", d.exchange], ["Session", d.session], ["Error from Supabase", d.linkError]];
-    const text = rows.map(([a, b]) => a + ": " + b).join("\n");
+      ["Link exchange", d.exchange], ["Session", d.session], ["Saved in browser", d.saved], ["Error from Supabase", d.linkError]];
+    const text = rows.map(([a, b]) => a + ": " + b).join("\n") + "\n\nRecent sign-in log:\n" + (d.log || []).join("\n");
     return `<details class="panel mt" ${d.queryKeys !== "none" || d.hashKeys !== "none" ? "open" : ""}><summary><b>Sign-in check</b> <span class="meta">for troubleshooting</span></summary>
       <div class="mt">${rows.map(([a, b]) => `<div class="rank"><span></span><span>${esc(a)}</span><span class="num">${esc(b)}</span></div>`).join("")}</div>
+      <h3 class="mt">Recent sign-in log</h3><ol class="log">${(d.log || []).map((l) => `<li>${esc(l)}</li>`).join("") || "<li>Nothing yet</li>"}</ol>
       <button class="btn ghost mt" type="button" id="copydiag" data-t="${esc(text)}">Copy these details</button></details>`;
   }
 
