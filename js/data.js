@@ -5,6 +5,20 @@
   const live = !!(cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase);
   const words = (t) => (t.trim().match(/\S+/g) || []).length;
   const minsAgo = (d) => Math.max(0, Math.round((Date.now() - new Date(d)) / 60000));
+  // Shrink a picture to a cover-sized JPEG (max 900 x 1200) so uploads are small and fast.
+  async function shrink(file) {
+    if (!file || !/^image\//.test(file.type)) throw new Error("Please choose a picture (JPG, PNG or WebP).");
+    if (file.size > 15 * 1024 * 1024) throw new Error("That picture is too large. Please pick one under 15 MB.");
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("Couldn't read that picture.")); i.src = url; });
+      const k = Math.min(1, 900 / img.naturalWidth, 1200 / img.naturalHeight);
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      return await new Promise((res) => c.toBlob(res, "image/jpeg", 0.85));
+    } finally { URL.revokeObjectURL(url); }
+  }
 
   // ---------------- demo backend ----------------
   function demo() {
@@ -16,7 +30,7 @@
     const all = () => [...U.mine, ...seed];
     const card = (s) => ({ id: s.id, title: s.title, author: s.author, tags: s.tags, blurb: s.blurb,
       followers: s.followers + (U.follows.includes(s.id) && !s.sample ? 1 : 0), ago: s.ago ?? minsAgo(s.updated),
-      chapterCount: s.chapters.length, sample: !!s.sample, mine: !s.sample });
+      chapterCount: s.chapters.length, sample: !!s.sample, mine: !s.sample, coverUrl: s.coverUrl || "" });
     const find = (id) => all().find((s) => s.id === id);
     return {
       live: false,
@@ -43,6 +57,16 @@
       async createStory(d) { const s = { id: "u" + Date.now().toString(36), author: U.me.pen || "You", followers: 0, updated: new Date().toISOString(), chapters: [], ...d }; U.mine.unshift(s); save(); return s.id; },
       async addChapter(id, title, body, note) { const s = U.mine.find((x) => x.id === id); s.chapters.push({ t: title, body, note: note || "" }); s.updated = new Date().toISOString(); delete s.ago; save(); return s.chapters.length; },
       async report() {},
+      async setCover(id, file) {
+        const blob = await shrink(file);
+        const url = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+        const s = U.mine.find((x) => x.id === id); if (!s) throw new Error("Only your own stories."); s.coverUrl = url;
+        try { save(); } catch (e) {} return url;
+      },
+      async sendSuggestion(body, contact, page) { U.sugg = U.sugg || []; U.sugg.unshift({ id: "g" + Date.now(), body, contact, page, from: U.me.pen || "You", status: "new", at: new Date().toISOString() }); save(); },
+      async inbox() { return (U.sugg || []).map((x) => ({ ...x })); },
+      async setSuggestion(id, status) { const x = (U.sugg || []).find((g) => g.id === id); if (x) { x.status = status; save(); } },
+      async unread() { return (U.sugg || []).filter((g) => g.status === "new").length; },
       async stats() {
         const today = new Date();
         const daily = [...Array(14)].map((_, i) => { const d = new Date(today - (13 - i) * 864e5); return { day: d.toISOString().slice(0, 10), n: i === 13 ? 1 : 0 }; });
@@ -55,7 +79,7 @@
 
   // ---------------- Supabase backend ----------------
   function supa() {
-    const VERSION = "2026-11-23.2";
+    const VERSION = "2026-11-23.3";
     // What the address bar looked like when the page opened (names only, never the secret values).
     const q = new URLSearchParams(location.search);
     const hq = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -98,7 +122,17 @@
     const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
     // Name the author link explicitly: follows also connects stories to profiles, so Supabase needs to know which one.
     const COLS = "id,title,blurb,tags,updated_at,author_id,profiles!stories_author_id_fkey(pen_name),chapters(count),follows(count)";
-    const card = (r) => ({ id: r.id, title: r.title, author: r.profiles?.pen_name || "Unknown", tags: r.tags || [], blurb: r.blurb,
+    // Ask for cover_url too; if the database update hasn't been run yet, quietly fall back without it.
+    let withCover = true;
+    async function stories(build) {
+      if (withCover) {
+        const res = await build(sb.from("stories").select(COLS + ",cover_url"));
+        if (!(res.error && /cover_url/.test(res.error.message))) return ok(res);
+        withCover = false;
+      }
+      return ok(await build(sb.from("stories").select(COLS)));
+    }
+    const card = (r) => ({ id: r.id, title: r.title, author: r.profiles?.pen_name || "Unknown", tags: r.tags || [], blurb: r.blurb, coverUrl: r.cover_url || "",
       followers: r.follows?.[0]?.count || 0, ago: minsAgo(r.updated_at), chapterCount: r.chapters?.[0]?.count || 0,
       sample: false, mine: !!me && r.author_id === me.id });
     async function loadMe(session) {
@@ -157,9 +191,9 @@
       },
       async signOut() { log("signed out by the Sign out button"); await sb.auth.signOut(); me = null; },
       async setPen(pen) { const u = need(); ok(await sb.from("profiles").upsert({ id: u.id, pen_name: pen })); u.pen = pen; },
-      async listStories() { return ok(await sb.from("stories").select(COLS).order("updated_at", { ascending: false }).limit(100)).map(card); },
+      async listStories() { return (await stories((q) => q.order("updated_at", { ascending: false }).limit(100))).map(card); },
       async getStory(id) {
-        const r = ok(await sb.from("stories").select(COLS).eq("id", id).maybeSingle()); if (!r) return null;
+        const r = await stories((q) => q.eq("id", id).maybeSingle()); if (!r) return null;
         const ch = ok(await sb.from("chapters").select("id,n,title,word_count").eq("story_id", id).order("n"));
         const st = { ...card(r), chapters: ch.map((c) => ({ id: c.id, n: c.n, title: c.title, words: c.word_count, views: null })) };
         if (st.mine && ch.length) {
@@ -193,7 +227,7 @@
       async addComment(chId, body) { const u = need(); ok(await sb.from("comments").insert({ chapter_id: chId, user_id: u.id, body })); },
       async myStories() {
         if (!me) return [];
-        const list = ok(await sb.from("stories").select(COLS).eq("author_id", me.id).order("updated_at", { ascending: false })).map(card);
+        const list = (await stories((q) => q.eq("author_id", me.id).order("updated_at", { ascending: false }))).map(card);
         const v = await sb.from("chapter_stats").select("views,chapters!inner(story_id)");
         if (!v.error) { const t = {}; v.data.forEach((x) => { const sid = x.chapters?.story_id; t[sid] = (t[sid] || 0) + x.views; }); list.forEach((s) => (s.views = t[s.id] || 0)); }
         return list;
@@ -218,6 +252,29 @@
         ok(await sb.from("reports").insert({ reporter_id: u.id, target_type: type, target_id: targetId, reason, details }));
       },
       async stats() { return ok(await sb.rpc("site_stats")); },
+      async setCover(id, file) {
+        const u = need();
+        const blob = await shrink(file);
+        const path = u.id + "/" + id + "-" + Date.now() + ".jpg";
+        const up = await sb.storage.from("covers").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+        if (up.error) throw new Error(/bucket|not found/i.test(up.error.message) ? "Covers aren't switched on yet (the database update hasn't been run)." : up.error.message);
+        const url = sb.storage.from("covers").getPublicUrl(path).data.publicUrl;
+        const res = await sb.from("stories").update({ cover_url: url }).eq("id", id).eq("author_id", u.id);
+        if (res.error) throw new Error(/cover_url/.test(res.error.message) ? "Covers aren't switched on yet (the database update hasn't been run)." : res.error.message);
+        return url;
+      },
+      async sendSuggestion(body, contact, page) {
+        const res = await sb.from("suggestions").insert({ user_id: me ? me.id : null, body, contact: contact || null, page: page || null });
+        if (res.error) throw new Error(/suggestions/.test(res.error.message) && /exist|schema cache/.test(res.error.message) ? "The suggestion box isn't switched on yet. Please try again soon." : res.error.message);
+      },
+      async inbox() {
+        const rows = ok(await sb.from("suggestions").select("id,user_id,body,contact,page,status,created_at").order("created_at", { ascending: false }).limit(200));
+        const ids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+        const names = ids.length ? Object.fromEntries(ok(await sb.from("profiles").select("id,pen_name").in("id", ids)).map((p) => [p.id, p.pen_name])) : {};
+        return rows.map((r) => ({ id: r.id, body: r.body, contact: r.contact || "", page: r.page || "", status: r.status, at: r.created_at, from: r.user_id ? names[r.user_id] || "Signed-in reader" : "Visitor" }));
+      },
+      async setSuggestion(id, status) { ok(await sb.from("suggestions").update({ status }).eq("id", id)); },
+      async unread() { const { count, error } = await sb.from("suggestions").select("id", { count: "exact", head: true }).eq("status", "new"); return error ? 0 : count || 0; },
     };
   }
 

@@ -9,13 +9,14 @@
   const ago = (m) => (m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " d ago");
   const k = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
   const H1 = (t) => `<h1 class="page">${esc(t)}</h1>`;
-  let lastNote = "", size = 18, filter = "", me = null, follows = [], token = 0, toastT = null;
+  let inboxView = "open", lastPage = "", lastNote = "", size = 18, filter = "", me = null, follows = [], token = 0, toastT = null;
   try { size = +localStorage.getItem("salvo.size") || 18; } catch (e) {}
 
   const toast = (t) => { const e = $("toast"); e.textContent = t; e.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove("show"), Math.max(2400, t.length * 60)); };
   const hash = (s) => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 2147483647; return h || 7; };
 
   function cover(st) {
+    if (st.coverUrl) return `<img class="cover" src="${esc(st.coverUrl)}" alt="Cover of ${esc(st.title)}" loading="lazy" decoding="async">`;
     const p = PALS[hash(st.id) % PALS.length];
     let s = hash(st.id + st.title);
     const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
@@ -54,7 +55,7 @@
     let last = 0; try { last = +localStorage.getItem("salvo.read." + id) || 0; } catch (e) {}
     const next = Math.min(last + 1, st.chapters.length) || 1;
     return `<section class="band"><div class="wrap sgrid">${cover(st)}<div><h1 class="page">${esc(st.title)}</h1><div class="meta">by ${esc(st.author)} · ${k(st.followers)} followers · updated ${ago(st.ago)}</div>${tagHtml(st)}<p class="blurb">${esc(st.blurb)}</p>
-    <div class="row gap">${st.chapters.length ? `<a class="btn" href="#read-${st.id}-${next}">${last ? "Continue, chapter " + next : "Read chapter 1"}</a>` : ""}<button class="btn ghost" id="follow">${fol ? "Following" : "Follow"}</button>${st.mine ? `<a class="btn ghost" href="#write">Post a chapter</a>` : `<button class="btn ghost" data-report="story" data-id="${st.id}">Report</button>`}</div>
+    <div class="row gap">${st.chapters.length ? `<a class="btn" href="#read-${st.id}-${next}">${last ? "Continue, chapter " + next : "Read chapter 1"}</a>` : ""}<button class="btn ghost" id="follow">${fol ? "Following" : "Follow"}</button>${st.mine ? `<a class="btn ghost" href="#write">Post a chapter</a><label class="btn ghost filebtn">${st.coverUrl ? "Change cover" : "Add a cover"}<input type="file" id="coverfile" accept="image/*" data-id="${st.id}"></label>` : `<button class="btn ghost" data-report="story" data-id="${st.id}">Report</button>`}</div>
     ${st.mine && st.chapters.some((c) => c.views != null) ? `<p class="meta">Views are visible to you only. Total: ${k(st.chapters.reduce((a, c) => a + (c.views || 0), 0))}</p>` : ""}
     <h2>Chapters</h2>${st.chapters.map((c) => `<a class="chap" href="#read-${st.id}-${c.n}"><span>${c.n}. ${esc(c.title)}${c.n <= last ? ' <span class="meta">· read</span>' : ""}</span><span class="meta num">${c.views != null ? k(c.views) + " views · " : ""}${Math.max(1, Math.round(c.words / 230))} min</span></a>`).join("") || '<p class="note">No chapters yet.</p>'}<div class="mt">${ad()}</div></div></div></section>`;
   }
@@ -88,7 +89,7 @@
     if (!me.pen) return `<section class="band"><div class="wrap signin">${H1("Choose a pen name")}<form id="pform"><label>Pen name<input id="pen" required minlength="2" maxlength="40"></label><p class="note">Readers see this on your stories and comments.</p><button class="btn" type="submit">Save</button></form></div></section>`;
     const mine = await DB.myStories();
     return `<section class="band"><div class="wrap">${H1("Author dashboard")}<p class="meta">Writing as ${esc(me.pen)} · <a href="#signin">Change pen name</a></p><div class="two">
-    <form id="sform"><h2>New story</h2><label>Title<input id="stitle" required maxlength="80"></label><label>Blurb<textarea id="sblurb" class="short" required maxlength="400"></textarea></label><fieldset><legend>Tags</legend><div class="checks">${TAGS.map((t, i) => `<label><input type="checkbox" value="${esc(t)}" id="tg${i}"> ${esc(t)}</label>`).join("")}</div></fieldset><button class="btn" type="submit">Create story</button></form>
+    <form id="sform"><h2>New story</h2><label>Title<input id="stitle" required maxlength="80"></label><label>Blurb<textarea id="sblurb" class="short" required maxlength="400"></textarea></label><label>Cover image <span class="meta">(optional, you can add or change it later)</span><input type="file" id="scover" accept="image/*"></label><fieldset><legend>Tags</legend><div class="checks">${TAGS.map((t, i) => `<label><input type="checkbox" value="${esc(t)}" id="tg${i}"> ${esc(t)}</label>`).join("")}</div></fieldset><button class="btn" type="submit">Create story</button></form>
     <form id="chform"><h2>Post a chapter</h2>${mine.length ? `<label>Story<select id="cstory">${mine.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join("")}</select></label><label>Chapter title<input id="ctitle" required maxlength="100"></label><label>Chapter text<textarea id="cbody" class="tall" required maxlength="100000"></textarea></label><p class="note">Leave a blank line between paragraphs.</p><label>Author's note <span class="meta">(optional, shown after the chapter)</span><textarea id="cnote" class="short" maxlength="5000" placeholder="Thanks for reading! Next chapter Friday."></textarea></label><button class="btn" type="submit">Publish chapter</button>
     <h2 class="mt">Your stories</h2>${mine.map((s) => `<a class="chap" href="#story-${s.id}"><span>${esc(s.title)}</span><span class="meta num">${s.chapterCount} ch · ${k(s.followers)} followers${s.views != null ? " · " + k(s.views) + " views" : ""}</span></a>`).join("")}` : '<p class="note">Create a story first, then post chapters to it here.</p>'}</form></div></div></section>`;
   }
@@ -133,6 +134,24 @@
     <div class="panel"><h2>Activity</h2>${[["Stories", x.stories], ["Chapters", x.chapters], ["Comments", x.comments], ["Follows", x.follows], ["Open reports", x.open_reports]].map(([l, n]) => `<div class="rank"><span></span><span>${l}</span><span class="num">${k(n)}</span></div>`).join("")}<button class="btn ghost mt" id="refresh">Refresh</button></div></div></div></section>`;
   }
 
+  async function suggest() {
+    return `<section class="band"><div class="wrap narrow">${H1("Suggestion box")}<p class="blurb">Ideas, bugs, a tag we're missing, a feature you want? Tell us. Every suggestion goes straight to the site owner.</p>
+    <form id="sugform" class="panel"><label>Your suggestion<textarea id="sugbody" required minlength="3" maxlength="3000"></textarea></label>
+    <label>How to reach you <span class="meta">(optional, only the owner sees this)</span><input id="sugcontact" maxlength="200" placeholder="Email or pen name" value="${esc(me ? me.pen || "" : "")}"></label>
+    <button class="btn" type="submit">Send suggestion</button></form></div></section>`;
+  }
+
+  async function inbox() {
+    if (!me || !me.admin) return notFound();
+    const all = await DB.inbox();
+    const show = all.filter((x) => (inboxView === "archived" ? x.status === "archived" : x.status !== "archived"));
+    const nNew = all.filter((x) => x.status === "new").length;
+    return `<section class="band"><div class="wrap narrow">${H1("Inbox")}<p class="meta">Suggestions from readers and authors. Only you can see this page. ${nNew} new.</p>
+    <div class="chips"><button class="chip ${inboxView !== "archived" ? "on" : ""}" data-iv="open">Open</button><button class="chip ${inboxView === "archived" ? "on" : ""}" data-iv="archived">Archived</button></div>
+    ${show.map((x) => `<article class="sugg ${x.status === "new" ? "new" : ""}"><div class="meta">${x.status === "new" ? "<b>New</b> · " : ""}${esc(x.from)}${x.contact ? " · " + esc(x.contact) : ""} · ${esc(new Date(x.at).toLocaleString())}${x.page ? " · from " + esc(x.page) : ""}</div><p>${esc(x.body).replace(/\n/g, "<br>")}</p>
+      <div class="row">${x.status === "new" ? `<button class="btn ghost small2" data-sg="${x.id}" data-st="read">Mark read</button>` : ""}${x.status !== "archived" ? `<button class="btn ghost small2" data-sg="${x.id}" data-st="archived">Archive</button>` : `<button class="btn ghost small2" data-sg="${x.id}" data-st="read">Move back</button>`}</div></article>`).join("") || '<p class="note">Nothing here yet.</p>'}</div></section>`;
+  }
+
   const notFound = () => `<section class="band"><div class="wrap">${H1("Not found")}<p>That story or chapter doesn't exist, or was taken down. <a href="#home">Back to browsing</a></p></div></section>`;
 
   function modal(h) { $("mbox").innerHTML = h; $("modal").classList.add("open"); const b = $("mbox").querySelector("select,button"); if (b) b.focus(); }
@@ -146,11 +165,13 @@
     let v = "home", m, job;
     if ((m = h.match(/^read-(.+)-(\d+)$/))) { job = read(m[1], +m[2]); v = ""; }
     else if ((m = h.match(/^story-(.+)$/))) { job = story(m[1]); v = ""; }
-    else if (["library", "write", "signin", "adfree", "stats"].includes(h)) { v = h; job = { library, write, signin, adfree, stats }[h](); }
+    else if (["library", "write", "signin", "adfree", "stats", "suggest", "inbox"].includes(h)) { v = h; job = { library, write, signin, adfree, stats, suggest, inbox }[h](); }
     else job = home();
     document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("on", a.dataset.v === v));
     $("navsign").textContent = me ? "Account" : "Sign in";
     $("navstats").hidden = !(me && me.admin);
+    $("navinbox").hidden = !(me && me.admin);
+    if (me && me.admin && DB.unread) DB.unread().then((n) => { $("navinbox").textContent = n ? "Inbox (" + n + ")" : "Inbox"; }).catch(() => {});
     app.setAttribute("aria-busy", "true");
     const slow = setTimeout(() => { if (t === token) app.innerHTML = '<p class="loading">Loading…</p>'; }, 250);
     let html;
@@ -184,7 +205,10 @@
     if (pf) pf.onsubmit = (e) => { e.preventDefault(); busy(pf.querySelector("button"), async () => { try { await DB.setPen($("pen").value.trim()); } catch (err) { throw new Error(/duplicate|unique/i.test(err.message) ? "That pen name is taken. Try another." : err.message); } me = await DB.user(); render(); }); };
     const sf = $("sform");
     if (sf) sf.onsubmit = (e) => { e.preventDefault(); const tags = TAGS.filter((t, i) => $("tg" + i).checked); if (!tags.length) { toast("Pick at least one tag"); return; }
-      busy(sf.querySelector("button"), async () => { await DB.createStory({ title: $("stitle").value.trim(), blurb: $("sblurb").value.trim(), tags }); toast("Story created. Now post chapter 1."); render(); }); };
+      busy(sf.querySelector("button"), async () => { const id = await DB.createStory({ title: $("stitle").value.trim(), blurb: $("sblurb").value.trim(), tags });
+        const f = $("scover").files[0];
+        if (f) { try { await DB.setCover(id, f); } catch (err) { toast("Story created, but the cover didn't upload: " + err.message); render(); return; } }
+        toast("Story created. Now post chapter 1."); render(); }); };
     const chf = $("chform");
     if (chf && $("cstory")) chf.onsubmit = (e) => { e.preventDefault(); const id = $("cstory").value;
       busy(chf.querySelector("button"), async () => { const n = await DB.addChapter(id, $("ctitle").value.trim(), $("cbody").value.trim(), $("cnote").value.trim()); toast("Chapter " + n + " published"); location.hash = "#read-" + id + "-" + n; }); };
@@ -192,6 +216,13 @@
     if (inf) inf.onsubmit = (e) => { e.preventDefault(); busy(inf.querySelector("button"), async () => { toast(await DB.signIn($("email").value.trim())); }); };
     const rf = $("refresh");
     if (rf) rf.onclick = () => render();
+    const cvf = $("coverfile");
+    if (cvf) cvf.onchange = () => { const f = cvf.files[0]; if (!f) return; const lab = cvf.closest("label"); lab.classList.add("busy"); lab.firstChild.textContent = "Uploading…";
+      DB.setCover(cvf.dataset.id, f).then(() => { toast("Cover updated"); render(); }, (err) => { toast(err.message); render(); }); };
+    const sgf = $("sugform");
+    if (sgf) sgf.onsubmit = (e) => { e.preventDefault(); busy(sgf.querySelector("button"), async () => { await DB.sendSuggestion($("sugbody").value.trim(), $("sugcontact").value.trim(), lastPage); $("sugbody").value = ""; toast("Thanks! Your suggestion was sent."); }); };
+    app.querySelectorAll("[data-iv]").forEach((b) => (b.onclick = () => { inboxView = b.dataset.iv; render(); }));
+    app.querySelectorAll("[data-sg]").forEach((b) => (b.onclick = () => busy(b, async () => { await DB.setSuggestion(b.dataset.sg, b.dataset.st); render(); })));
     const pe = $("penedit");
     if (pe) pe.onsubmit = (e) => { e.preventDefault(); const v = $("penname").value.trim(); if (v === me.pen) { toast("That's already your pen name"); return; }
       busy(pe.querySelector("button"), async () => {
@@ -206,7 +237,7 @@
     if (so) so.onclick = () => busy(so, async () => { await DB.signOut(); me = null; follows = []; location.hash = "#home"; render(); });
   }
 
-  window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
+  window.addEventListener("hashchange", (e) => { try { const from = new URL(e.oldURL).hash.slice(1); if (from && from !== "suggest") lastPage = from; } catch (err) {} render(); window.scrollTo(0, 0); });
   DB.onAuth(async (u) => { me = u && u.id ? u : null; follows = await DB.myFollows().catch(() => []); render(); });
   (async () => {
     try { me = await DB.user(); follows = await DB.myFollows(); } catch (e) { console.error(e); }

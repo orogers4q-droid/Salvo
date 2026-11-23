@@ -129,3 +129,13 @@ header>.wrap,.hero>.wrap,footer>.wrap{position:relative;z-index:1}
 .hero p,.hero .hero-meta{text-shadow:0 1px 10px rgba(7,11,20,.9)}
 .hero .cover{box-shadow:0 0 0 1px rgba(150,195,255,.25),0 10px 40px rgba(0,0,0,.5)}
 .logo{text-shadow:0 0 14px rgba(150,195,255,.35)}
+img.cover{object-fit:cover;background:#1a2133}
+.filebtn{position:relative;overflow:hidden;cursor:pointer}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.filebtn.busy{opacity:.7;pointer-events:none}
+input[type=file]{padding:9px;background:var(--card)}
+.sugg{border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:0 0 12px;background:var(--card)}
+.sugg.new{border-color:var(--sig)}
+.sugg p{margin:8px 0 12px;white-space:normal}
+.btn.small2{min-height:40px;padding:0 14px;font-size:15px}
+footer a{color:inherit}
