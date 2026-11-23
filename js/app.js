@@ -79,6 +79,7 @@
     const st = await DB.getStory(id);
     if (!st) return notFound();
     const x = DB.storyExtras ? await DB.storyExtras(id, st.mine).catch(() => null) : null;
+    const isFeat = me && me.admin && DB.featuredId ? (await DB.featuredId().catch(() => null)) === id : false;
     const fol = follows.includes(id);
     let last = 0; try { last = +localStorage.getItem("salvo.read." + id) || 0; } catch (e) {}
     const sched = (x && x.scheduled) || {};
@@ -96,7 +97,7 @@
     }
     return `<section class="band"><div class="wrap sgrid">${cover(st)}<div><h1 class="page">${esc(st.title)}</h1><div class="meta">by ${esc(st.author)} · ${k(st.followers)} followers · updated ${ago(st.ago)}${ratingLine}</div>${tagHtml(st)}<p class="blurb">${esc(st.blurb)}</p>
     ${rateBox}
-    <div class="row gap">${pub.length ? `<a class="btn" href="#read-${st.id}-${next}">${last ? "Continue, chapter " + next : "Read chapter 1"}</a>` : ""}<button class="btn ghost" id="follow">${fol ? "Following" : "Follow"}</button>${support}${me && me.admin && DB.setFeatured ? `<button class="btn ghost" id="feature" data-id="${st.id}">Feature on home page</button>` : ""}${st.mine ? `<a class="btn ghost" href="#write">Post a chapter</a><label class="btn ghost filebtn">${st.coverUrl ? "Change cover" : "Add a cover"}<input type="file" id="coverfile" accept="image/*" data-id="${st.id}"></label>` : `<button class="btn ghost" data-report="story" data-id="${st.id}">Report</button>`}</div>
+    <div class="row gap">${pub.length ? `<a class="btn" href="#read-${st.id}-${next}">${last ? "Continue, chapter " + next : "Read chapter 1"}</a>` : ""}<button class="btn ghost" id="follow">${fol ? "Following" : "Follow"}</button>${support}${me && me.admin && DB.setFeatured ? (isFeat ? `<span class="pill feat">Featured on home page</span><button class="btn ghost" id="unfeature">Back to my book</button>` : `<button class="btn ghost" id="feature" data-id="${st.id}">Feature on home page</button>`) : ""}${st.mine ? `<a class="btn ghost" href="#write">Post a chapter</a><label class="btn ghost filebtn">${st.coverUrl ? "Change cover" : "Add a cover"}<input type="file" id="coverfile" accept="image/*" data-id="${st.id}"></label>` : `<button class="btn ghost" data-report="story" data-id="${st.id}">Report</button>`}</div>
     ${st.mine && st.chapters.some((c) => c.views != null) ? `<p class="meta">Views are visible to you only. Total: ${k(st.chapters.reduce((a, c) => a + (c.views || 0), 0))}</p>` : ""}
     ${supportForm}
     <h2>Chapters</h2>${st.chapters.map((c) => `<a class="chap ${sched[c.n] ? "sched" : ""}" href="#read-${st.id}-${c.n}"><span>${c.n}. ${esc(c.title)}${sched[c.n] ? ` <span class="pill">Scheduled · ${esc(fmtWhen(sched[c.n]))}</span>` : c.n <= last ? ' <span class="meta">· read</span>' : ""}</span><span class="meta num">${c.views != null && !sched[c.n] ? k(c.views) + " views · " : ""}${Math.max(1, Math.round(c.words / 230))} min</span></a>`).join("") || '<p class="note">No chapters yet.</p>'}
@@ -288,7 +289,9 @@
     const spf = $("supform");
     if (spf) spf.onsubmit = (e) => { e.preventDefault(); const i = $("supurl"); busy(spf.querySelector("button"), async () => { await DB.setSupport(i.dataset.id, i.value.trim()); toast(i.value.trim() ? "Support link saved" : "Support link removed"); render(); }); };
     const fe = $("feature");
-    if (fe) fe.onclick = () => busy(fe, async () => { await DB.setFeatured(fe.dataset.id); toast("This story now leads the home page"); });
+    if (fe) fe.onclick = () => busy(fe, async () => { await DB.setFeatured(fe.dataset.id); toast("This story now leads the home page"); render(); });
+    const uf = $("unfeature");
+    if (uf) uf.onclick = () => busy(uf, async () => { await DB.setFeatured(null); toast("Your own book leads the home page again"); render(); });
     const cvf = $("coverfile");
     if (cvf) cvf.onchange = () => { const f = cvf.files[0]; if (!f) return; const lab = cvf.closest("label"); lab.classList.add("busy"); lab.firstChild.textContent = "Uploading…";
       DB.setCover(cvf.dataset.id, f).then(() => { toast("Cover updated"); render(); }, (err) => { toast(err.message); render(); }); };

@@ -158,3 +158,4 @@ footer a{color:inherit}
 .btn.support{background:#2f6f4f;color:#fff}
 .libitem{display:grid;gap:6px}
 .libitem .cont{justify-self:start}
+.pill.feat{align-self:center;background:#2f6f4f;color:#fff;padding:6px 12px}
