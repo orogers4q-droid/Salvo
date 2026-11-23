@@ -90,6 +90,8 @@
       async markUpdatesSeen() { U.seen = Date.now(); save(); },
       async saveProgress(id, n) { U.prog = U.prog || {}; U.prog[id] = { n, at: Date.now() }; save(); },
       async myProgress() { return { ...(U.prog || {}) }; },
+      async featuredId() { return U.featured || (U.mine.find((s) => s.chapters.length) || {}).id || null; },
+      async setFeatured(id) { U.featured = id; save(); },
       async sendSuggestion(body, contact, page) { U.sugg = U.sugg || []; U.sugg.unshift({ id: "g" + Date.now(), body, contact, page, from: U.me.pen || "You", status: "new", at: new Date().toISOString() }); save(); },
       async inbox() { return (U.sugg || []).map((x) => ({ ...x })); },
       async setSuggestion(id, status) { const x = (U.sugg || []).find((g) => g.id === id); if (x) { x.status = status; save(); } },
@@ -106,7 +108,7 @@
 
   // ---------------- Supabase backend ----------------
   function supa() {
-    const VERSION = "2026-11-23.4";
+    const VERSION = "2026-11-23.5";
     // What the address bar looked like when the page opened (names only, never the secret values).
     const q = new URLSearchParams(location.search);
     const hq = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -355,6 +357,8 @@
         const res = await sb.from("reading_progress").select("story_id,chapter_n,updated_at").eq("user_id", me.id);
         return res.error ? {} : Object.fromEntries(res.data.map((r) => [r.story_id, { n: r.chapter_n, at: +new Date(r.updated_at) }]));
       },
+      async featuredId() { const { data, error } = await sb.rpc("featured_story"); return error ? null : data || null; },
+      async setFeatured(id) { need(); ok(await sb.from("site_settings").upsert({ key: "featured_story", value: id, updated_at: new Date().toISOString() })); },
       async sendSuggestion(body, contact, page) {
         const res = await sb.from("suggestions").insert({ user_id: me ? me.id : null, body, contact: contact || null, page: page || null });
         if (res.error) throw new Error(/suggestions/.test(res.error.message) && /exist|schema cache/.test(res.error.message) ? "The suggestion box isn't switched on yet. Please try again soon." : res.error.message);

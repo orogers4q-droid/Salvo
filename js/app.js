@@ -1,6 +1,6 @@
 // Salvo front end: hash routes (#home, #story-ID, #read-ID-N, #library, #write, #signin, #adfree).
 (function () {
-  const TAGS = ["Space marines", "Naval", "Mech", "Drop troops", "LitRPG", "Fantasy war", "Alt history", "Hard sci-fi"];
+  const TAGS = ["Military sci-fi", "Dark fantasy", "Space marines", "Naval", "Mech", "Drop troops", "LitRPG", "Fantasy war", "Alt history", "Hard sci-fi"];
   const PALS = [["#1d2a44", "#e4572e", "#9aa7b8"], ["#3a2a1c", "#d9a441", "#c9b79a"], ["#0f2b2e", "#5fb3a1", "#a8c3bd"], ["#2b2240", "#e46f9a", "#b7a8d1"], ["#33361e", "#c8d35a", "#c2c4a0"]];
   const DB = window.DB;
   const $ = (id) => document.getElementById(id);
@@ -51,7 +51,8 @@
     if (!stories.length) return INTRO + `<section class="hero band"><div class="wrap"><div><div class="kicker">Opening soon</div><h1>Military sci-fi and fantasy, one chapter at a time</h1><p>Be one of the first authors on Salvo.</p><a class="btn" href="#write">Post the first story</a></div></div></section>`;
     const live = stories.filter((s) => s.chapterCount > 0);
     const pool = live.length ? live : stories;
-    const f = [...pool].sort((a, b) => (b.trend || 0) - (a.trend || 0) || b.followers - a.followers)[0];
+    const fid = DB.featuredId ? await DB.featuredId().catch(() => null) : null;
+    const f = stories.find((s) => s.id === fid) || [...pool].sort((a, b) => (b.trend || 0) - (a.trend || 0) || b.followers - a.followers)[0];
     const lists = disc ? LISTS.filter(([key]) => key !== "rated" || stories.some((s) => s.ratingCount)) : [LISTS[0]];
     const cur = lists.find(([key]) => key === listMode) || lists[0];
     let list = stories.filter((s) => !filter || s.tags.includes(filter));
@@ -95,7 +96,7 @@
     }
     return `<section class="band"><div class="wrap sgrid">${cover(st)}<div><h1 class="page">${esc(st.title)}</h1><div class="meta">by ${esc(st.author)} · ${k(st.followers)} followers · updated ${ago(st.ago)}${ratingLine}</div>${tagHtml(st)}<p class="blurb">${esc(st.blurb)}</p>
     ${rateBox}
-    <div class="row gap">${pub.length ? `<a class="btn" href="#read-${st.id}-${next}">${last ? "Continue, chapter " + next : "Read chapter 1"}</a>` : ""}<button class="btn ghost" id="follow">${fol ? "Following" : "Follow"}</button>${support}${st.mine ? `<a class="btn ghost" href="#write">Post a chapter</a><label class="btn ghost filebtn">${st.coverUrl ? "Change cover" : "Add a cover"}<input type="file" id="coverfile" accept="image/*" data-id="${st.id}"></label>` : `<button class="btn ghost" data-report="story" data-id="${st.id}">Report</button>`}</div>
+    <div class="row gap">${pub.length ? `<a class="btn" href="#read-${st.id}-${next}">${last ? "Continue, chapter " + next : "Read chapter 1"}</a>` : ""}<button class="btn ghost" id="follow">${fol ? "Following" : "Follow"}</button>${support}${me && me.admin && DB.setFeatured ? `<button class="btn ghost" id="feature" data-id="${st.id}">Feature on home page</button>` : ""}${st.mine ? `<a class="btn ghost" href="#write">Post a chapter</a><label class="btn ghost filebtn">${st.coverUrl ? "Change cover" : "Add a cover"}<input type="file" id="coverfile" accept="image/*" data-id="${st.id}"></label>` : `<button class="btn ghost" data-report="story" data-id="${st.id}">Report</button>`}</div>
     ${st.mine && st.chapters.some((c) => c.views != null) ? `<p class="meta">Views are visible to you only. Total: ${k(st.chapters.reduce((a, c) => a + (c.views || 0), 0))}</p>` : ""}
     ${supportForm}
     <h2>Chapters</h2>${st.chapters.map((c) => `<a class="chap ${sched[c.n] ? "sched" : ""}" href="#read-${st.id}-${c.n}"><span>${c.n}. ${esc(c.title)}${sched[c.n] ? ` <span class="pill">Scheduled · ${esc(fmtWhen(sched[c.n]))}</span>` : c.n <= last ? ' <span class="meta">· read</span>' : ""}</span><span class="meta num">${c.views != null && !sched[c.n] ? k(c.views) + " views · " : ""}${Math.max(1, Math.round(c.words / 230))} min</span></a>`).join("") || '<p class="note">No chapters yet.</p>'}
@@ -286,6 +287,8 @@
     if (rvd) rvd.onclick = () => busy(rvd, async () => { await DB.deleteReview(rvf.dataset.id); toast("Review deleted"); render(); });
     const spf = $("supform");
     if (spf) spf.onsubmit = (e) => { e.preventDefault(); const i = $("supurl"); busy(spf.querySelector("button"), async () => { await DB.setSupport(i.dataset.id, i.value.trim()); toast(i.value.trim() ? "Support link saved" : "Support link removed"); render(); }); };
+    const fe = $("feature");
+    if (fe) fe.onclick = () => busy(fe, async () => { await DB.setFeatured(fe.dataset.id); toast("This story now leads the home page"); });
     const cvf = $("coverfile");
     if (cvf) cvf.onchange = () => { const f = cvf.files[0]; if (!f) return; const lab = cvf.closest("label"); lab.classList.add("busy"); lab.firstChild.textContent = "Uploading…";
       DB.setCover(cvf.dataset.id, f).then(() => { toast("Cover updated"); render(); }, (err) => { toast(err.message); render(); }); };
