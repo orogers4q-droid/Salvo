@@ -53,7 +53,7 @@
 
   // ---------------- Supabase backend ----------------
   function supa() {
-    const VERSION = "2026-11-22.5";
+    const VERSION = "2026-11-23.1";
     // What the address bar looked like when the page opened (names only, never the secret values).
     const q = new URLSearchParams(location.search);
     const hq = new URLSearchParams(location.hash.replace(/^#/, ""));

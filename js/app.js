@@ -84,7 +84,7 @@
     if (!me) return signInFirst("write");
     if (!me.pen) return `<section class="band"><div class="wrap signin">${H1("Choose a pen name")}<form id="pform"><label>Pen name<input id="pen" required minlength="2" maxlength="40"></label><p class="note">Readers see this on your stories and comments.</p><button class="btn" type="submit">Save</button></form></div></section>`;
     const mine = await DB.myStories();
-    return `<section class="band"><div class="wrap">${H1("Author dashboard")}<p class="meta">Writing as ${esc(me.pen)}</p><div class="two">
+    return `<section class="band"><div class="wrap">${H1("Author dashboard")}<p class="meta">Writing as ${esc(me.pen)} · <a href="#signin">Change pen name</a></p><div class="two">
     <form id="sform"><h2>New story</h2><label>Title<input id="stitle" required maxlength="80"></label><label>Blurb<textarea id="sblurb" class="short" required maxlength="400"></textarea></label><fieldset><legend>Tags</legend><div class="checks">${TAGS.map((t, i) => `<label><input type="checkbox" value="${esc(t)}" id="tg${i}"> ${esc(t)}</label>`).join("")}</div></fieldset><button class="btn" type="submit">Create story</button></form>
     <form id="chform"><h2>Post a chapter</h2>${mine.length ? `<label>Story<select id="cstory">${mine.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join("")}</select></label><label>Chapter title<input id="ctitle" required maxlength="100"></label><label>Chapter text<textarea id="cbody" class="tall" required maxlength="100000"></textarea></label><p class="note">Leave a blank line between paragraphs.</p><button class="btn" type="submit">Publish chapter</button>
     <h2 class="mt">Your stories</h2>${mine.map((s) => `<a class="chap" href="#story-${s.id}"><span>${esc(s.title)}</span><span class="meta num">${s.chapterCount} ch · ${k(s.followers)} followers</span></a>`).join("")}` : '<p class="note">Create a story first, then post chapters to it here.</p>'}</form></div></div></section>`;
@@ -104,7 +104,9 @@
   }
 
   async function signin() {
-    if (me) return `<section class="band"><div class="wrap signin">${H1("You're signed in")}<p>${esc(me.pen || me.email)}</p><button class="btn ghost" id="signout">Sign out</button>${diagBox()}</div></section>`;
+    if (me) return `<section class="band"><div class="wrap signin">${H1("Your account")}<p class="meta">Signed in as ${esc(me.email)}</p>
+    <form id="penedit"><label>Pen name<input id="penname" required minlength="2" maxlength="40" value="${esc(me.pen)}"></label><p class="note">Shown on your stories and comments. Changing it updates them everywhere.</p><button class="btn" type="submit">Save pen name</button></form>
+    <button class="btn ghost mt" id="signout">Sign out</button>${diagBox()}</div></section>`;
     let saved = ""; try { saved = localStorage.getItem("salvo.email") || ""; } catch (e) {}
     return `<section class="band"><div class="wrap signin">${H1("Sign in or join")}${lastNote ? `<p class="warn">${esc(lastNote)}</p>` : ""}
     <form id="iform"><label>Email<input id="email" type="email" required autocomplete="email" value="${esc(saved)}"></label><button class="btn" type="submit">Email me a sign-in link</button><p class="note">No password. New here? The same link creates your account. Open the link in this same browser.</p></form>
@@ -176,7 +178,7 @@
     const cf = $("cform");
     if (cf) cf.onsubmit = (e) => { e.preventDefault(); const t = $("ctext").value.trim(); if (!t) return; busy(cf.querySelector("button"), async () => { await DB.addComment(app.querySelector(".reader").dataset.ch, t); toast("Comment posted"); render(); }); };
     const pf = $("pform");
-    if (pf) pf.onsubmit = (e) => { e.preventDefault(); busy(pf.querySelector("button"), async () => { await DB.setPen($("pen").value.trim()); me = await DB.user(); render(); }); };
+    if (pf) pf.onsubmit = (e) => { e.preventDefault(); busy(pf.querySelector("button"), async () => { try { await DB.setPen($("pen").value.trim()); } catch (err) { throw new Error(/duplicate|unique/i.test(err.message) ? "That pen name is taken. Try another." : err.message); } me = await DB.user(); render(); }); };
     const sf = $("sform");
     if (sf) sf.onsubmit = (e) => { e.preventDefault(); const tags = TAGS.filter((t, i) => $("tg" + i).checked); if (!tags.length) { toast("Pick at least one tag"); return; }
       busy(sf.querySelector("button"), async () => { await DB.createStory({ title: $("stitle").value.trim(), blurb: $("sblurb").value.trim(), tags }); toast("Story created. Now post chapter 1."); render(); }); };
@@ -187,6 +189,11 @@
     if (inf) inf.onsubmit = (e) => { e.preventDefault(); busy(inf.querySelector("button"), async () => { toast(await DB.signIn($("email").value.trim())); }); };
     const rf = $("refresh");
     if (rf) rf.onclick = () => render();
+    const pe = $("penedit");
+    if (pe) pe.onsubmit = (e) => { e.preventDefault(); const v = $("penname").value.trim(); if (v === me.pen) { toast("That's already your pen name"); return; }
+      busy(pe.querySelector("button"), async () => {
+        try { await DB.setPen(v); } catch (err) { throw new Error(/duplicate|unique/i.test(err.message) ? "That pen name is taken. Try another." : err.message); }
+        me = await DB.user(); toast("Pen name saved: " + me.pen); render(); }); };
     const cd = $("copydiag");
     if (cd) cd.onclick = async () => { try { await navigator.clipboard.writeText(cd.dataset.t); toast("Copied. Paste it to Claude."); } catch (e) { toast("Couldn't copy. Take a screenshot instead."); } };
     const cof = $("codeform");
