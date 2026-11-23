@@ -55,7 +55,7 @@
       async addComment(chId, body) { (U.comments[chId] = U.comments[chId] || []).push({ name: U.me.pen || "You", at: new Date().toISOString(), body }); save(); },
       async myStories() { const v = U.views || {}; return U.mine.map((s) => ({ ...card(s), views: s.chapters.reduce((a, c, i) => a + (v[s.id + "-" + (i + 1)] || 0), 0) })); },
       async createStory(d) { const s = { id: "u" + Date.now().toString(36), author: U.me.pen || "You", followers: 0, updated: new Date().toISOString(), chapters: [], ...d }; U.mine.unshift(s); save(); return s.id; },
-      async addChapter(id, title, body, note) { const s = U.mine.find((x) => x.id === id); s.chapters.push({ t: title, body, note: note || "" }); s.updated = new Date().toISOString(); delete s.ago; save(); return s.chapters.length; },
+      async addChapter(id, title, body, note, publishAt) { const s = U.mine.find((x) => x.id === id); s.chapters.push({ t: title, body, note: note || "", publishAt: publishAt || null }); s.updated = new Date().toISOString(); delete s.ago; save(); return s.chapters.length; },
       async report() {},
       async setCover(id, file) {
         const blob = await shrink(file);
@@ -63,6 +63,33 @@
         const s = U.mine.find((x) => x.id === id); if (!s) throw new Error("Only your own stories."); s.coverUrl = url;
         try { save(); } catch (e) {} return url;
       },
+      async discover() {
+        const R = U.ratings || {};
+        return all().map((s) => { const c = card(s); const rs = Object.values(R[s.id] || {}); const sr = s.sample ? s.rating : null;
+          return { ...c, lastAt: Date.now() - c.ago * 60000, createdAt: Date.now() - (c.ago + (s.sample ? 50000 : 0)) * 60000,
+            rating: rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : sr, ratingCount: rs.length || (sr ? Math.round(s.followers / 40) : 0), trend: s.sample ? Math.round(s.followers / 100) : 0 }; });
+      },
+      async storyExtras(id, mine) {
+        const s = find(id); const R = (U.ratings || {})[id] || {}; const rs = Object.values(R);
+        const reviews = ((U.reviews || {})[id] || []).map((r) => ({ ...r, mine: r.name === (U.me.pen || "You"), stars: R.me || 0 }));
+        const scheduled = {}; if (s && !s.sample) s.chapters.forEach((c, i) => { if (c.publishAt && new Date(c.publishAt) > new Date()) scheduled[i + 1] = c.publishAt; });
+        return { on: true, rating: rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : s?.rating ?? null, ratingCount: rs.length || (s?.rating ? Math.round(s.followers / 40) : 0),
+          myStars: R.me || 0, reviews, myReview: reviews.find((r) => r.mine) || null, supportUrl: s?.supportUrl || "", scheduled };
+      },
+      async rate(id, stars) { U.ratings = U.ratings || {}; U.ratings[id] = U.ratings[id] || {}; if (stars) U.ratings[id].me = stars; else delete U.ratings[id].me; save(); },
+      async saveReview(id, title, body) { U.reviews = U.reviews || {}; const l = (U.reviews[id] = (U.reviews[id] || []).filter((r) => r.name !== (U.me.pen || "You")));
+        l.unshift({ id: "r" + Date.now(), name: U.me.pen || "You", title, body, at: new Date().toISOString() }); save(); },
+      async deleteReview(id) { U.reviews = U.reviews || {}; U.reviews[id] = (U.reviews[id] || []).filter((r) => r.name !== (U.me.pen || "You")); save(); },
+      async setSupport(id, url) { if (url && !/^https:\/\/(www\.)?(patreon\.com|ko-fi\.com|buymeacoffee\.com|paypal\.me|github\.com\/sponsors|subscribestar\.com|subscribestar\.adult)\/\S+$/i.test(url)) throw new Error("Use a full https link to Patreon, Ko-fi, Buy Me a Coffee, PayPal.me, GitHub Sponsors or SubscribeStar.");
+        const s = U.mine.find((x) => x.id === id); s.supportUrl = url || ""; save(); },
+      async updates() { const seen = U.seen || 0; const out = [];
+        for (const id of U.follows) { const s = find(id); if (!s) continue; s.chapters.forEach((c, i) => { const at = s.sample ? Date.now() - (s.ago + (s.chapters.length - 1 - i) * 1440) * 60000 : +new Date(s.updated);
+          out.push({ storyId: id, story: s.title, n: i + 1, title: c.t, at: new Date(at).toISOString(), isNew: at > seen }); }); }
+        return out.sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 50); },
+      async unreadUpdates() { return (await this.updates()).filter((u) => u.isNew).length; },
+      async markUpdatesSeen() { U.seen = Date.now(); save(); },
+      async saveProgress(id, n) { U.prog = U.prog || {}; U.prog[id] = { n, at: Date.now() }; save(); },
+      async myProgress() { return { ...(U.prog || {}) }; },
       async sendSuggestion(body, contact, page) { U.sugg = U.sugg || []; U.sugg.unshift({ id: "g" + Date.now(), body, contact, page, from: U.me.pen || "You", status: "new", at: new Date().toISOString() }); save(); },
       async inbox() { return (U.sugg || []).map((x) => ({ ...x })); },
       async setSuggestion(id, status) { const x = (U.sugg || []).find((g) => g.id === id); if (x) { x.status = status; save(); } },
@@ -79,7 +106,7 @@
 
   // ---------------- Supabase backend ----------------
   function supa() {
-    const VERSION = "2026-11-23.3";
+    const VERSION = "2026-11-23.4";
     // What the address bar looked like when the page opened (names only, never the secret values).
     const q = new URLSearchParams(location.search);
     const hq = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -234,12 +261,15 @@
       },
       async recordView(chId) { const { error } = await sb.rpc("record_view", { ch: chId }); if (error) console.warn("View not counted:", error.message); },
       async createStory(d) { const u = need(); return ok(await sb.from("stories").insert({ author_id: u.id, title: d.title, blurb: d.blurb, tags: d.tags }).select("id").single()).id; },
-      async addChapter(id, title, body, note) {
+      async addChapter(id, title, body, note, publishAt) {
         const last = ok(await sb.from("chapters").select("n").eq("story_id", id).order("n", { ascending: false }).limit(1));
         const n = (last[0]?.n || 0) + 1;
         const row = { story_id: id, n, title, body, word_count: words(body) };
         if (note) row.author_note = note;
+        if (publishAt) row.publish_at = publishAt;
         let res = await sb.from("chapters").insert(row);
+        if (res.error && publishAt && /publish_at/.test(res.error.message))
+          throw new Error("Scheduling isn't switched on yet (the database update hasn't been run). Nothing was posted.");
         if (res.error && note && /author_note/.test(res.error.message)) {
           delete row.author_note; res = await sb.from("chapters").insert(row);
           if (!res.error) throw new Error("Chapter " + n + " was published, but the author's note couldn't be saved yet (the database update hasn't been run).");
@@ -262,6 +292,68 @@
         const res = await sb.from("stories").update({ cover_url: url }).eq("id", id).eq("author_id", u.id);
         if (res.error) throw new Error(/cover_url/.test(res.error.message) ? "Covers aren't switched on yet (the database update hasn't been run)." : res.error.message);
         return url;
+      },
+      // ----- discovery engine (needs supabase/2026-11-23-engine.sql; returns null/empty before that) -----
+      async discover() {
+        const res = await sb.from("story_cards").select("*").limit(300);
+        if (res.error) { console.warn("Discovery lists off:", res.error.message); return null; }
+        return res.data.map((r) => ({ id: r.id, title: r.title, author: r.pen_name || "Unknown", tags: r.tags || [], blurb: r.blurb,
+          followers: r.followers || 0, ago: minsAgo(r.last_chapter_at || r.created_at), lastAt: r.last_chapter_at ? +new Date(r.last_chapter_at) : 0,
+          createdAt: +new Date(r.created_at), chapterCount: r.chapter_count || 0, coverUrl: r.cover_url || "", supportUrl: r.support_url || "",
+          rating: r.rating_avg != null ? +r.rating_avg : null, ratingCount: r.rating_count || 0, trend: r.trend_7d || 0,
+          sample: false, mine: !!me && r.author_id === me.id }));
+      },
+      async storyExtras(id, mine) {
+        const x = { rating: null, ratingCount: 0, myStars: 0, reviews: [], myReview: null, supportUrl: "", scheduled: {}, on: false };
+        const c = await sb.from("story_cards").select("rating_avg,rating_count,support_url").eq("id", id).maybeSingle();
+        if (c.error || !c.data) return x;
+        x.on = true; x.rating = c.data.rating_avg != null ? +c.data.rating_avg : null; x.ratingCount = c.data.rating_count || 0; x.supportUrl = c.data.support_url || "";
+        const [rv, rt] = await Promise.all([
+          sb.from("reviews").select("id,user_id,title,body,created_at,updated_at,profiles(pen_name)").eq("story_id", id).order("created_at", { ascending: false }).limit(50),
+          sb.from("ratings").select("user_id,stars").eq("story_id", id),
+        ]);
+        const stars = Object.fromEntries((rt.data || []).map((r) => [r.user_id, r.stars]));
+        if (me) x.myStars = stars[me.id] || 0;
+        x.reviews = (rv.data || []).map((r) => ({ id: r.id, mine: !!me && r.user_id === me.id, name: r.profiles?.pen_name || "Reader", title: r.title || "", body: r.body, at: r.created_at, edited: r.updated_at && r.updated_at !== r.created_at, stars: stars[r.user_id] || 0 }));
+        x.myReview = x.reviews.find((r) => r.mine) || null;
+        if (mine) {
+          const sc = await sb.from("chapters").select("n,publish_at").eq("story_id", id).not("publish_at", "is", null);
+          if (!sc.error) for (const r of sc.data) if (new Date(r.publish_at) > new Date()) x.scheduled[r.n] = r.publish_at;
+        }
+        return x;
+      },
+      async rate(storyId, stars) {
+        const u = need();
+        if (!stars) ok(await sb.from("ratings").delete().eq("user_id", u.id).eq("story_id", storyId));
+        else ok(await sb.from("ratings").upsert({ user_id: u.id, story_id: storyId, stars, updated_at: new Date().toISOString() }, { onConflict: "user_id,story_id" }));
+      },
+      async saveReview(storyId, title, body) {
+        const u = need();
+        ok(await sb.from("reviews").upsert({ user_id: u.id, story_id: storyId, title: title || null, body, updated_at: new Date().toISOString() }, { onConflict: "story_id,user_id" }));
+      },
+      async deleteReview(storyId) { const u = need(); ok(await sb.from("reviews").delete().eq("user_id", u.id).eq("story_id", storyId)); },
+      async setSupport(storyId, url) {
+        const u = need();
+        const res = await sb.from("stories").update({ support_url: url || null }).eq("id", storyId).eq("author_id", u.id);
+        if (res.error) throw new Error(/check constraint|violates/.test(res.error.message) ? "Use a full https link to Patreon, Ko-fi, Buy Me a Coffee, PayPal.me, GitHub Sponsors or SubscribeStar." : res.error.message);
+      },
+      async updates() {
+        if (!me) return [];
+        const res = await sb.rpc("my_updates", { lim: 50 });
+        if (res.error) return [];
+        return res.data.map((r) => ({ storyId: r.story_id, story: r.story_title, n: r.n, title: r.chapter_title, at: r.published_at, isNew: r.is_new }));
+      },
+      async unreadUpdates() { return (await this.updates()).filter((u) => u.isNew).length; },
+      async markUpdatesSeen() { if (!me) return; await sb.from("profiles").update({ updates_seen_at: new Date().toISOString() }).eq("id", me.id); },
+      async saveProgress(storyId, n) {
+        if (!me) return;
+        const res = await sb.from("reading_progress").upsert({ user_id: me.id, story_id: storyId, chapter_n: n, updated_at: new Date().toISOString() }, { onConflict: "user_id,story_id" });
+        if (res.error) console.warn("Progress not saved:", res.error.message);
+      },
+      async myProgress() {
+        if (!me) return {};
+        const res = await sb.from("reading_progress").select("story_id,chapter_n,updated_at").eq("user_id", me.id);
+        return res.error ? {} : Object.fromEntries(res.data.map((r) => [r.story_id, { n: r.chapter_n, at: +new Date(r.updated_at) }]));
       },
       async sendSuggestion(body, contact, page) {
         const res = await sb.from("suggestions").insert({ user_id: me ? me.id : null, body, contact: contact || null, page: page || null });
