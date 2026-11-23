@@ -30,30 +30,32 @@
       async setPen(p) { U.me.pen = p; save(); },
       async listStories() { return all().map(card).sort((a, b) => a.ago - b.ago); },
       async getStory(id) { const s = find(id); if (!s) return null;
-        return { ...card(s), chapters: s.chapters.map((c, i) => ({ n: i + 1, title: c.t, words: words(c.body) })) }; },
+        const v = U.views || {};
+        return { ...card(s), chapters: s.chapters.map((c, i) => ({ n: i + 1, id: s.id + "-" + (i + 1), title: c.t, words: words(c.body), views: s.sample ? null : v[s.id + "-" + (i + 1)] || 0 })) }; },
       async getChapter(id, n) { const s = find(id); const c = s && s.chapters[n - 1]; if (!c) return null;
-        return { id: id + "-" + n, title: c.t, body: c.body, count: s.chapters.length }; },
+        return { id: id + "-" + n, title: c.t, body: c.body, note: c.note || "", count: s.chapters.length }; },
+      async recordView(chId) { U.views = U.views || {}; U.views[chId] = (U.views[chId] || 0) + 1; save(); },
       async myFollows() { return [...U.follows]; },
       async toggleFollow(id) { U.follows = U.follows.includes(id) ? U.follows.filter((x) => x !== id) : [...U.follows, id]; save(); return U.follows.includes(id); },
       async comments(chId) { return (U.comments[chId] || []).map((c) => ({ ...c })); },
       async addComment(chId, body) { (U.comments[chId] = U.comments[chId] || []).push({ name: U.me.pen || "You", at: new Date().toISOString(), body }); save(); },
-      async myStories() { return U.mine.map(card); },
+      async myStories() { const v = U.views || {}; return U.mine.map((s) => ({ ...card(s), views: s.chapters.reduce((a, c, i) => a + (v[s.id + "-" + (i + 1)] || 0), 0) })); },
       async createStory(d) { const s = { id: "u" + Date.now().toString(36), author: U.me.pen || "You", followers: 0, updated: new Date().toISOString(), chapters: [], ...d }; U.mine.unshift(s); save(); return s.id; },
-      async addChapter(id, title, body) { const s = U.mine.find((x) => x.id === id); s.chapters.push({ t: title, body }); s.updated = new Date().toISOString(); delete s.ago; save(); return s.chapters.length; },
+      async addChapter(id, title, body, note) { const s = U.mine.find((x) => x.id === id); s.chapters.push({ t: title, body, note: note || "" }); s.updated = new Date().toISOString(); delete s.ago; save(); return s.chapters.length; },
       async report() {},
       async stats() {
         const today = new Date();
         const daily = [...Array(14)].map((_, i) => { const d = new Date(today - (13 - i) * 864e5); return { day: d.toISOString().slice(0, 10), n: i === 13 ? 1 : 0 }; });
         const cm = Object.values(U.comments).reduce((a, c) => a + c.length, 0);
         return { accounts: 1, authors: U.mine.length ? 1 : 0, stories: all().length, chapters: all().reduce((a, s) => a + s.chapters.length, 0),
-          comments: cm, follows: U.follows.length, open_reports: 0, new_7d: 1, active_7d: 1, daily, demo: true };
+          comments: cm, follows: U.follows.length, views: Object.values(U.views || {}).reduce((a, b) => a + b, 0), open_reports: 0, new_7d: 1, active_7d: 1, daily, demo: true };
       },
     };
   }
 
   // ---------------- Supabase backend ----------------
   function supa() {
-    const VERSION = "2026-11-23.1";
+    const VERSION = "2026-11-23.2";
     // What the address bar looked like when the page opened (names only, never the secret values).
     const q = new URLSearchParams(location.search);
     const hq = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -158,11 +160,21 @@
       async listStories() { return ok(await sb.from("stories").select(COLS).order("updated_at", { ascending: false }).limit(100)).map(card); },
       async getStory(id) {
         const r = ok(await sb.from("stories").select(COLS).eq("id", id).maybeSingle()); if (!r) return null;
-        const ch = ok(await sb.from("chapters").select("n,title,word_count").eq("story_id", id).order("n"));
-        return { ...card(r), chapters: ch.map((c) => ({ n: c.n, title: c.title, words: c.word_count })) };
+        const ch = ok(await sb.from("chapters").select("id,n,title,word_count").eq("story_id", id).order("n"));
+        const st = { ...card(r), chapters: ch.map((c) => ({ id: c.id, n: c.n, title: c.title, words: c.word_count, views: null })) };
+        if (st.mine && ch.length) {
+          // Only the author can read these (database rule). Before the update is run, this just shows nothing.
+          const v = await sb.from("chapter_stats").select("chapter_id,views").in("chapter_id", ch.map((c) => c.id));
+          if (!v.error) { const m = Object.fromEntries(v.data.map((x) => [x.chapter_id, x.views])); st.chapters.forEach((c) => (c.views = m[c.id] || 0)); }
+        }
+        return st;
       },
       async getChapter(id, n) {
-        const c = ok(await sb.from("chapters").select("id,title,body").eq("story_id", id).eq("n", n).maybeSingle()); if (!c) return null;
+        // Ask for the author's note too; if the database update hasn't been run yet, fall back without it.
+        let res = await sb.from("chapters").select("id,title,body,author_note").eq("story_id", id).eq("n", n).maybeSingle();
+        if (res.error && /author_note/.test(res.error.message)) res = await sb.from("chapters").select("id,title,body").eq("story_id", id).eq("n", n).maybeSingle();
+        const c = ok(res); if (!c) return null;
+        c.note = c.author_note || "";
         const { count } = await sb.from("chapters").select("n", { count: "exact", head: true }).eq("story_id", id);
         return { ...c, count: count || n };
       },
@@ -179,12 +191,26 @@
           .map((c) => ({ name: c.profiles?.pen_name || "Reader", at: c.created_at, body: c.body }));
       },
       async addComment(chId, body) { const u = need(); ok(await sb.from("comments").insert({ chapter_id: chId, user_id: u.id, body })); },
-      async myStories() { if (!me) return []; return ok(await sb.from("stories").select(COLS).eq("author_id", me.id).order("updated_at", { ascending: false })).map(card); },
+      async myStories() {
+        if (!me) return [];
+        const list = ok(await sb.from("stories").select(COLS).eq("author_id", me.id).order("updated_at", { ascending: false })).map(card);
+        const v = await sb.from("chapter_stats").select("views,chapters!inner(story_id)");
+        if (!v.error) { const t = {}; v.data.forEach((x) => { const sid = x.chapters?.story_id; t[sid] = (t[sid] || 0) + x.views; }); list.forEach((s) => (s.views = t[s.id] || 0)); }
+        return list;
+      },
+      async recordView(chId) { const { error } = await sb.rpc("record_view", { ch: chId }); if (error) console.warn("View not counted:", error.message); },
       async createStory(d) { const u = need(); return ok(await sb.from("stories").insert({ author_id: u.id, title: d.title, blurb: d.blurb, tags: d.tags }).select("id").single()).id; },
-      async addChapter(id, title, body) {
+      async addChapter(id, title, body, note) {
         const last = ok(await sb.from("chapters").select("n").eq("story_id", id).order("n", { ascending: false }).limit(1));
         const n = (last[0]?.n || 0) + 1;
-        ok(await sb.from("chapters").insert({ story_id: id, n, title, body, word_count: words(body) }));
+        const row = { story_id: id, n, title, body, word_count: words(body) };
+        if (note) row.author_note = note;
+        let res = await sb.from("chapters").insert(row);
+        if (res.error && note && /author_note/.test(res.error.message)) {
+          delete row.author_note; res = await sb.from("chapters").insert(row);
+          if (!res.error) throw new Error("Chapter " + n + " was published, but the author's note couldn't be saved yet (the database update hasn't been run).");
+        }
+        ok(res);
         return n;
       },
       async report(type, targetId, reason, details) {

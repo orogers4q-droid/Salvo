@@ -37,11 +37,11 @@
 
   async function home() {
     const stories = await DB.listStories();
-    if (!stories.length) return `<section class="hero band"><div class="wrap"><div><div class="kicker">Opening soon</div><h1>Military sci-fi and fantasy, one chapter at a time</h1><p>Be one of the first authors on Salvo.</p><a class="btn" href="#write">Post the first story</a></div></div></section>`;
+    if (!stories.length) return `<section class="intro band"><div class="wrap"><p><b>Salvo is a home for serialized military fantasy and sci-fi novels.</b> Space marines, naval fleets, mechs, sieges and wars of magic, posted chapter by chapter. Read free, follow the stories you like, or publish your own.</p><div class="row"><a class="btn small" href="#write">Start writing</a></div></div></section><section class="hero band"><div class="wrap"><div><div class="kicker">Opening soon</div><h1>Military sci-fi and fantasy, one chapter at a time</h1><p>Be one of the first authors on Salvo.</p><a class="btn" href="#write">Post the first story</a></div></div></section>`;
     const f = [...stories].sort((a, b) => b.followers - a.followers)[0];
     const list = stories.filter((s) => !filter || s.tags.includes(filter));
     const top = [...stories].sort((a, b) => b.followers - a.followers).slice(0, 5);
-    return `<section class="hero band"><div class="wrap"><div><div class="kicker">Featured serial</div><h1>${esc(f.title)}</h1><p>${esc(f.blurb)}</p><div class="meta hero-meta">${esc(f.author)} · ${k(f.followers)} followers · ${f.chapterCount} chapters</div><div class="row"><a class="btn" href="#read-${f.id}-1">Start reading</a><a class="btn ghost" href="#story-${f.id}">Chapters</a></div></div>${cover(f)}</div></section>
+    return `<section class="intro band"><div class="wrap"><p><b>Salvo is a home for serialized military fantasy and sci-fi novels.</b> Space marines, naval fleets, mechs, sieges and wars of magic, posted chapter by chapter. Read free, follow the stories you like, or publish your own.</p><div class="row"><a class="btn small" href="#write">Start writing</a></div></div></section><section class="hero band"><div class="wrap"><div><div class="kicker">Featured serial</div><h1>${esc(f.title)}</h1><p>${esc(f.blurb)}</p><div class="meta hero-meta">${esc(f.author)} · ${k(f.followers)} followers · ${f.chapterCount} chapters</div><div class="row"><a class="btn" href="#read-${f.id}-1">Start reading</a><a class="btn ghost" href="#story-${f.id}">Chapters</a></div></div>${cover(f)}</div></section>
     <section class="band"><div class="wrap"><div class="chips" role="group" aria-label="Filter by tag"><button class="chip ${filter ? "" : "on"}" data-tag="">All</button>${TAGS.map((t) => `<button class="chip ${filter === t ? "on" : ""}" data-tag="${esc(t)}">${esc(t)}</button>`).join("")}</div>
     <div class="cols"><div><h2>Latest updates</h2><div class="list">${list.map(item).join("") || `<p class="note">No stories with this tag yet. <a href="#write">Be the first to post one.</a></p>`}</div>${stories.some((s) => s.sample) ? '<p class="note">Sample stories written to show the layout.</p>' : ""}</div>
     <aside class="side"><div class="panel"><h2>Most followed</h2>${top.map((s, i) => `<a class="rank" href="#story-${s.id}"><b>${i + 1}</b><span>${esc(s.title)}</span><span class="meta num">${k(s.followers)}</span></a>`).join("")}</div>${ad()}<div class="panel"><h2>Write for Salvo</h2><p class="tight">Post your military sci-fi or fantasy serial, chapter by chapter.</p><a class="btn" href="#write">Start a story</a></div></aside></div></div></section>`;
@@ -55,7 +55,8 @@
     const next = Math.min(last + 1, st.chapters.length) || 1;
     return `<section class="band"><div class="wrap sgrid">${cover(st)}<div><h1 class="page">${esc(st.title)}</h1><div class="meta">by ${esc(st.author)} · ${k(st.followers)} followers · updated ${ago(st.ago)}</div>${tagHtml(st)}<p class="blurb">${esc(st.blurb)}</p>
     <div class="row gap">${st.chapters.length ? `<a class="btn" href="#read-${st.id}-${next}">${last ? "Continue, chapter " + next : "Read chapter 1"}</a>` : ""}<button class="btn ghost" id="follow">${fol ? "Following" : "Follow"}</button>${st.mine ? `<a class="btn ghost" href="#write">Post a chapter</a>` : `<button class="btn ghost" data-report="story" data-id="${st.id}">Report</button>`}</div>
-    <h2>Chapters</h2>${st.chapters.map((c) => `<a class="chap" href="#read-${st.id}-${c.n}"><span>${c.n}. ${esc(c.title)}${c.n <= last ? ' <span class="meta">· read</span>' : ""}</span><span class="meta num">${Math.max(1, Math.round(c.words / 230))} min</span></a>`).join("") || '<p class="note">No chapters yet.</p>'}<div class="mt">${ad()}</div></div></div></section>`;
+    ${st.mine && st.chapters.some((c) => c.views != null) ? `<p class="meta">Views are visible to you only. Total: ${k(st.chapters.reduce((a, c) => a + (c.views || 0), 0))}</p>` : ""}
+    <h2>Chapters</h2>${st.chapters.map((c) => `<a class="chap" href="#read-${st.id}-${c.n}"><span>${c.n}. ${esc(c.title)}${c.n <= last ? ' <span class="meta">· read</span>' : ""}</span><span class="meta num">${c.views != null ? k(c.views) + " views · " : ""}${Math.max(1, Math.round(c.words / 230))} min</span></a>`).join("") || '<p class="note">No chapters yet.</p>'}<div class="mt">${ad()}</div></div></div></section>`;
   }
 
   async function read(id, n) {
@@ -63,11 +64,13 @@
     if (!st || !c) return notFound();
     try { localStorage.setItem("salvo.read." + id, Math.max(n, +localStorage.getItem("salvo.read." + id) || 0)); } catch (e) {}
     const cm = await DB.comments(c.id);
+    if (!st.mine) { let seen = false; try { seen = !!localStorage.getItem("salvo.viewed." + c.id); localStorage.setItem("salvo.viewed." + c.id, "1"); } catch (e) {} if (!seen) DB.recordView(c.id).catch(() => {}); }
     const paras = c.body.split(/\n\s*\n+/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`);
     const mid = Math.ceil(paras.length / 2);
     return `<section class="band"><article class="reader" data-ch="${esc(c.id)}"><a class="meta" href="#story-${st.id}">${esc(st.title)} · ${esc(st.author)}</a><h1>${n}. ${esc(c.title)}</h1>
     <div class="tools"><button class="btn ghost" id="smaller" aria-label="Smaller text">A−</button><button class="btn ghost" id="bigger" aria-label="Bigger text">A+</button><span class="meta">Text size ${size}px</span></div>
     <div class="prose" style="font-size:${size}px">${paras.slice(0, mid).join("")}<div class="inad">${ad()}</div>${paras.slice(mid).join("")}</div>
+    ${c.note ? `<aside class="anote"><h2>Author's note</h2>${c.note.split(/\n\s*\n+/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("")}<p class="meta">${esc(st.author)}</p></aside>` : ""}
     <div class="pager">${n > 1 ? `<a class="btn ghost" href="#read-${st.id}-${n - 1}">Previous</a>` : "<span></span>"}${n < c.count ? `<a class="btn" href="#read-${st.id}-${n + 1}">Next chapter</a>` : `<a class="btn ghost" href="#story-${st.id}">You're caught up</a>`}</div>
     <h2>Comments (${cm.length})</h2>${me ? `<form id="cform"><label for="ctext">Add a comment</label><textarea id="ctext" class="short" required maxlength="5000"></textarea><div class="row gap"><button class="btn" type="submit">Post comment</button><button class="btn ghost" type="button" data-report="chapter" data-id="${esc(c.id)}">Report chapter</button></div></form>` : `<p><a href="#signin">Sign in</a> to comment.</p>`}
     ${cm.map((x) => `<div class="cmt"><b>${esc(x.name)}</b> <span class="meta">${esc(new Date(x.at).toLocaleDateString())}</span><div>${esc(x.body)}</div></div>`).join("") || '<p class="note">No comments yet.</p>'}</article></section>`;
@@ -86,8 +89,8 @@
     const mine = await DB.myStories();
     return `<section class="band"><div class="wrap">${H1("Author dashboard")}<p class="meta">Writing as ${esc(me.pen)} · <a href="#signin">Change pen name</a></p><div class="two">
     <form id="sform"><h2>New story</h2><label>Title<input id="stitle" required maxlength="80"></label><label>Blurb<textarea id="sblurb" class="short" required maxlength="400"></textarea></label><fieldset><legend>Tags</legend><div class="checks">${TAGS.map((t, i) => `<label><input type="checkbox" value="${esc(t)}" id="tg${i}"> ${esc(t)}</label>`).join("")}</div></fieldset><button class="btn" type="submit">Create story</button></form>
-    <form id="chform"><h2>Post a chapter</h2>${mine.length ? `<label>Story<select id="cstory">${mine.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join("")}</select></label><label>Chapter title<input id="ctitle" required maxlength="100"></label><label>Chapter text<textarea id="cbody" class="tall" required maxlength="100000"></textarea></label><p class="note">Leave a blank line between paragraphs.</p><button class="btn" type="submit">Publish chapter</button>
-    <h2 class="mt">Your stories</h2>${mine.map((s) => `<a class="chap" href="#story-${s.id}"><span>${esc(s.title)}</span><span class="meta num">${s.chapterCount} ch · ${k(s.followers)} followers</span></a>`).join("")}` : '<p class="note">Create a story first, then post chapters to it here.</p>'}</form></div></div></section>`;
+    <form id="chform"><h2>Post a chapter</h2>${mine.length ? `<label>Story<select id="cstory">${mine.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join("")}</select></label><label>Chapter title<input id="ctitle" required maxlength="100"></label><label>Chapter text<textarea id="cbody" class="tall" required maxlength="100000"></textarea></label><p class="note">Leave a blank line between paragraphs.</p><label>Author's note <span class="meta">(optional, shown after the chapter)</span><textarea id="cnote" class="short" maxlength="5000" placeholder="Thanks for reading! Next chapter Friday."></textarea></label><button class="btn" type="submit">Publish chapter</button>
+    <h2 class="mt">Your stories</h2>${mine.map((s) => `<a class="chap" href="#story-${s.id}"><span>${esc(s.title)}</span><span class="meta num">${s.chapterCount} ch · ${k(s.followers)} followers${s.views != null ? " · " + k(s.views) + " views" : ""}</span></a>`).join("")}` : '<p class="note">Create a story first, then post chapters to it here.</p>'}</form></div></div></section>`;
   }
 
   function diagBox() {
@@ -125,7 +128,7 @@
     const max = Math.max(1, ...x.daily.map((d) => d.n));
     const tile = (n, l, sub) => `<div class="stat"><div class="big num">${k(n)}</div><div><b>${l}</b>${sub ? `<div class="meta">${sub}</div>` : ""}</div></div>`;
     return `<section class="band"><div class="wrap">${H1("Site stats")}<p class="meta">Only you can see this page.${x.demo ? " Demo numbers until the database is connected." : ""}</p>
-    <div class="stats">${tile(x.accounts, "Accounts", `${k(x.new_7d)} new this week`)}${tile(readers, "Readers", "accounts with no stories")}${tile(x.authors, "Authors", "accounts with at least one story")}${tile(x.active_7d, "Active this week", "signed in within 7 days")}</div>
+    <div class="stats">${tile(x.accounts, "Accounts", `${k(x.new_7d)} new this week`)}${tile(readers, "Readers", "accounts with no stories")}${tile(x.authors, "Authors", "accounts with at least one story")}${tile(x.active_7d, "Active this week", "signed in within 7 days")}${x.views != null ? tile(x.views, "Chapter views", "all stories, all time") : ""}</div>
     <div class="two mt"><div class="panel"><h2>New accounts, last 14 days</h2><div class="bars">${x.daily.map((d) => `<div class="bar"><span class="meta num">${new Date(d.day + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span><span class="track"><span style="width:${(d.n / max) * 100}%"></span></span><span class="num">${d.n}</span></div>`).join("")}</div></div>
     <div class="panel"><h2>Activity</h2>${[["Stories", x.stories], ["Chapters", x.chapters], ["Comments", x.comments], ["Follows", x.follows], ["Open reports", x.open_reports]].map(([l, n]) => `<div class="rank"><span></span><span>${l}</span><span class="num">${k(n)}</span></div>`).join("")}<button class="btn ghost mt" id="refresh">Refresh</button></div></div></div></section>`;
   }
@@ -184,7 +187,7 @@
       busy(sf.querySelector("button"), async () => { await DB.createStory({ title: $("stitle").value.trim(), blurb: $("sblurb").value.trim(), tags }); toast("Story created. Now post chapter 1."); render(); }); };
     const chf = $("chform");
     if (chf && $("cstory")) chf.onsubmit = (e) => { e.preventDefault(); const id = $("cstory").value;
-      busy(chf.querySelector("button"), async () => { const n = await DB.addChapter(id, $("ctitle").value.trim(), $("cbody").value.trim()); toast("Chapter " + n + " published"); location.hash = "#read-" + id + "-" + n; }); };
+      busy(chf.querySelector("button"), async () => { const n = await DB.addChapter(id, $("ctitle").value.trim(), $("cbody").value.trim(), $("cnote").value.trim()); toast("Chapter " + n + " published"); location.hash = "#read-" + id + "-" + n; }); };
     const inf = $("iform");
     if (inf) inf.onsubmit = (e) => { e.preventDefault(); busy(inf.querySelector("button"), async () => { toast(await DB.signIn($("email").value.trim())); }); };
     const rf = $("refresh");

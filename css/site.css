@@ -112,3 +112,10 @@ summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;f
 .rank .num{overflow-wrap:anywhere;white-space:normal;text-align:right}
 .log{margin:6px 0 0;padding-left:1.4em;font-size:14px;color:var(--mute)}
 .log li{overflow-wrap:anywhere;margin:2px 0}
+.intro{background:var(--sand);color:#262c1c;padding-block:16px}
+.intro .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between}
+.intro p{margin:0;max-width:78ch;font-size:16px}
+.btn.small{min-height:40px;padding:0 14px;background:var(--olive);color:var(--sand)}
+.anote{margin:8px 0 28px;padding:16px 18px;border-left:4px solid var(--sig);background:var(--card);border-radius:0 8px 8px 0}
+.anote h2{font-size:22px;margin:0 0 8px}
+.anote p{margin:0 0 .8em}
