@@ -119,3 +119,13 @@ summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;f
 .anote{margin:8px 0 28px;padding:16px 18px;border-left:4px solid var(--sig);background:var(--card);border-radius:0 8px 8px 0}
 .anote h2{font-size:22px;margin:0 0 8px}
 .anote p{margin:0 0 .8em}
+/* Space bands: header, banner and footer sit on a deep-space ground with effects drawn behind the content (js/fx.js). */
+:root{--space:#070b14}
+header,.hero,footer{background:radial-gradient(120% 90% at 75% 40%,#0e1a2e 0%,var(--space) 70%);color:#e9e4cf;position:relative;overflow:hidden}
+header{position:sticky}
+canvas.fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+header>.wrap,.hero>.wrap,footer>.wrap{position:relative;z-index:1}
+.hero h1{text-shadow:0 2px 18px rgba(7,11,20,.9)}
+.hero p,.hero .hero-meta{text-shadow:0 1px 10px rgba(7,11,20,.9)}
+.hero .cover{box-shadow:0 0 0 1px rgba(150,195,255,.25),0 10px 40px rgba(0,0,0,.5)}
+.logo{text-shadow:0 0 14px rgba(150,195,255,.35)}
