@@ -3,8 +3,8 @@
 (function () {
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const MODES = {
-    hero: { stars: 1, galaxy: true, bolts: [3500, 8000] },
-    header: { stars: 0.5, galaxy: false, bolts: [9000, 20000] },
+    hero: { stars: 1, galaxy: true, bolts: [3500, 8000], ships: [9000, 20000], shipSize: 1 },
+    header: { stars: 0.5, galaxy: false, bolts: [9000, 20000], ships: [25000, 50000], shipSize: 0.45 },
     footer: { stars: 0.6, galaxy: false, bolts: null },
   };
 
@@ -19,6 +19,7 @@
     host.prepend(c);
     const ctx = c.getContext("2d");
     let W = 0, H = 0, dpr = 1, stars = [], arms = [], neb = null, bolt = null, nextBolt = 0, visible = true, raf = 0, last = 0;
+    let fleet = [], nextFleet = 0;
 
     function build() {
       const r = seeded(mode.length * 7919 + 13);
@@ -85,6 +86,54 @@
       return { pts, branches, born: performance.now(), life: 380 };
     }
 
+    // A flight of 1-3 ships crossing the band, leader in front, wingmen echeloned behind.
+    function makeFleet(now) {
+      const r = Math.random, dir = r() < 0.5 ? 1 : -1, n = 1 + Math.floor(r() * 3);
+      // Fly in clear lanes so ships never cross the title and blurb:
+      // phones: down by the cover; wider screens: above the title or below the buttons. The header uses its whole height.
+      const lane = mode !== "hero" ? [0.25, 0.5] : W < 600 ? [0.62, 0.3] : r() < 0.6 ? [0.07, 0.17] : [0.8, 0.12];
+      const y0 = H * (lane[0] + r() * lane[1]), climb = (r() - 0.5) * H * (mode !== "hero" ? 0.1 : 0.08);
+      const size = (W < 600 ? 0.75 : 1) * opt.shipSize * (0.8 + r() * 0.5);
+      const dur = (W < 600 ? 6500 : 8500) + r() * 3000;
+      const hue = r() < 0.7 ? "120,190,255" : "255,150,90";
+      return Array.from({ length: n }, (_, i) => ({
+        born: now + i * 140, dur, dir, size: size * (i ? 0.85 : 1), hue,
+        dx: -i * 34 * size, dy: (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 18 * size, y0, climb, ph: r() * 6,
+      }));
+    }
+    function drawShip(sh, t) {
+      const k = (t - sh.born) / sh.dur;
+      if (k < 0 || k > 1) return k <= 1;
+      const pad = 80 * sh.size;
+      const x = sh.dir > 0 ? -pad + k * (W + pad * 2) : W + pad - k * (W + pad * 2);
+      const y = sh.y0 + sh.climb * k + sh.dy;
+      const ang = Math.atan2(sh.climb / sh.dur, ((W + pad * 2) / sh.dur) * sh.dir);
+      ctx.save();
+      ctx.translate(x + sh.dx * sh.dir, y);
+      ctx.rotate(ang);
+      ctx.scale(sh.size, sh.size);
+      // engine trail
+      const g = ctx.createLinearGradient(-90, 0, -14, 0);
+      g.addColorStop(0, `rgba(${sh.hue},0)`); g.addColorStop(1, `rgba(${sh.hue},.55)`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(-14, -4); ctx.lineTo(-90, -1.2); ctx.lineTo(-90, 1.2); ctx.lineTo(-14, 4); ctx.closePath(); ctx.fill();
+      // hull: swept wedge with a dorsal ridge
+      ctx.fillStyle = "#c9d3e0";
+      ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(-6, -6); ctx.lineTo(-16, -15); ctx.lineTo(-13, -4); ctx.lineTo(-16, 0); ctx.lineTo(-13, 4); ctx.lineTo(-16, 15); ctx.lineTo(-6, 6); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#6f7d91";
+      ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(-6, 6); ctx.lineTo(-16, 15); ctx.lineTo(-13, 4); ctx.lineTo(-16, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#e4572e"; ctx.fillRect(-4, -1.2, 10, 2.4);              // signal stripe
+      ctx.fillStyle = "rgba(160,220,255,.95)";
+      ctx.beginPath(); ctx.ellipse(10, -1.2, 4.5, 2, 0, 0, 6.283); ctx.fill(); // cockpit
+      // engine glow, flickering
+      const fl = 0.75 + 0.25 * Math.sin(t * 0.04 + sh.ph);
+      ctx.shadowColor = `rgba(${sh.hue},1)`; ctx.shadowBlur = 12;
+      ctx.fillStyle = `rgba(235,245,255,${fl.toFixed(2)})`;
+      ctx.beginPath(); ctx.arc(-15, 0, 2.6, 0, 6.283); ctx.fill();
+      ctx.restore();
+      return true;
+    }
+
     function path(p) { ctx.beginPath(); ctx.moveTo(p[0][0], p[0][1]); for (let i = 1; i < p.length; i++) ctx.lineTo(p[i][0], p[i][1]); }
 
     function draw(t) {
@@ -113,6 +162,7 @@
           ctx.fillRect(x, y, p.size, p.size);
         }
       }
+      if (fleet.length) fleet = fleet.filter((sh) => drawShip(sh, t));
       if (bolt) {
         const age = t - bolt.born;
         if (age > bolt.life) bolt = null;
@@ -141,6 +191,10 @@
       if (!visible || document.hidden || !host.isConnected) return;
       if (t - last > 33) { // about 30 frames a second is plenty and easy on phones
         last = t;
+        if (opt.ships && !fleet.length && t > nextFleet) {
+          if (nextFleet) fleet = makeFleet(t);
+          nextFleet = t + opt.ships[0] + Math.random() * (opt.ships[1] - opt.ships[0]);
+        }
         if (opt.bolts && !bolt && t > nextBolt) {
           if (nextBolt) bolt = makeBolt();
           nextBolt = t + opt.bolts[0] + Math.random() * (opt.bolts[1] - opt.bolts[0]);
@@ -149,6 +203,8 @@
       }
       raf = requestAnimationFrame(loop);
     }
+    if (opt.ships) nextFleet = performance.now() + (mode === "hero" ? 2500 + Math.random() * 3000 : 15000);
+    c.flyby = () => { if (!reduce) { fleet = makeFleet(performance.now()); kick(); } }; // testing: document.querySelector("canvas.fx").flyby()
     c.strike = () => { if (!reduce) { bolt = makeBolt(); kick(); } }; // handy for testing: document.querySelector("canvas.fx").strike()
     const kick = () => { if (!reduce && !raf) raf = requestAnimationFrame(loop); };
 
