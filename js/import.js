@@ -10,6 +10,21 @@
   const MD_HEAD = /^#{1,3}\s+\S/;
   const BARE_CHAPTER = new RegExp(`^(?:#{1,3}\\s*)?(?:(?:chapter|ch\\.?)\\s+${NUM}|${NUM})[.:]?$`, "i");
   const MAX_TITLE = 100, MAX_BODY = 100000;
+  // The number part of a title like "Chapter 3: The Drop" or "Ch. Twelve - Fire".
+  const PREFIX = new RegExp(`^(?:chapter|ch\\.?)\\s+${NUM}\\b`, "i");
+
+  // Titles to match Salvo's own numbering: "Chapter 1: First Drop" posted as chapter 5 becomes
+  // "Chapter 5: First Drop". Titles without a chapter number (Prologue, "The Siege") are left alone.
+  function renumber(chapters, startN) {
+    let n = startN, changed = 0;
+    for (const c of chapters) {
+      if (!c.include) continue;
+      const m = c.title.match(PREFIX);
+      if (m) { const t = ("Chapter " + n + c.title.slice(m[0].length)).slice(0, MAX_TITLE); if (t !== c.title) { c.title = t; changed++; } }
+      n++;
+    }
+    return changed;
+  }
 
   const words = (t) => (t.trim() ? t.trim().split(/\s+/).length : 0);
   const clean = (t) => t.replace(/ /g, " ").replace(/[ \t]+\n/g, "\n").trim();
@@ -113,7 +128,7 @@
     return p;
   }
 
-  const api = { textToBlocks, htmlToBlocks, split, check, words, CHAPTER };
+  const api = { textToBlocks, htmlToBlocks, split, check, words, renumber, CHAPTER };
   if (typeof module !== "undefined" && module.exports) { module.exports = api; return; }
 
   // ---------------- The page ----------------
@@ -227,6 +242,7 @@
     box.innerHTML = `<p class="lede">Found <b>${state.chapters.length}</b> chapter${state.chapters.length === 1 ? "" : "s"} in ${esc(state.source)}${state.how ? ", using " + state.how : ""}. ${inc.length} will be added to <b>${esc(st.title)}</b> ${st.chapterCount ? "after its chapter " + st.chapterCount : "as its first chapters"}, ${total.toLocaleString()} words in all.</p>
       ${!state.how && state.chapters.length === 1 ? `<p class="warn">Salvo didn't find any chapter headings, so it's all one chapter. Open the text and use <b>Split at cursor</b>, or put each chapter title on its own line (like "Chapter 1") and start again.</p>` : ""}
       ${state.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}
+      ${(() => { const copy = state.chapters.map((c) => ({ ...c })); const n = renumber(copy, startN); return n ? `<div class="panel renum"><p class="tight"><b>${n} chapter title${n === 1 ? " has a number" : "s have numbers"} that won't match Salvo's.</b> For example, "${esc(state.chapters.find((c, i) => c.title !== copy[i].title).title)}" will be chapter ${startN + state.chapters.filter((c) => c.include).findIndex((c) => c.title !== copy[state.chapters.indexOf(c)].title)} here.</p><button class="btn ghost small2" type="button" id="imprenum">Renumber titles to match</button></div>` : ""; })()}
       <div class="impchs">${cards}</div>
       <div class="panel mt" id="imppub"><h2>When should they go live?</h2>
         <label class="radio"><input type="radio" name="impmode" value="now" ${state.mode === "now" ? "checked" : ""}> Publish them all now</label>
@@ -285,6 +301,8 @@
     if (nw) { nw.oninput = () => { state.firstNow = nw.value; }; nw.onchange = later; }
     if (ev) ev.onchange = () => { state.every = +ev.value; later(); };
     if (sd) { sd.oninput = () => { state.start = sd.value; }; sd.onchange = () => { state.start = sd.value; later(); }; }
+    const rn = document.getElementById("imprenum");
+    if (rn) rn.onclick = () => { const st = ctx.mine.find((s) => s.id === state.storyId); const n = renumber(state.chapters, st.chapterCount + 1); redraw(); toast(n + " title" + (n === 1 ? "" : "s") + " renumbered"); };
     document.getElementById("impreset").onclick = () => { if (confirmReset()) { state = null; mount(ctx); } };
     document.getElementById("imppost").onclick = (e) => post(ctx, box, e.target);
   }

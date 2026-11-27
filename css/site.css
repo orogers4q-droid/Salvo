@@ -180,3 +180,5 @@ footer a{color:inherit}
 .imp .radio{display:flex;gap:8px;align-items:center;font-weight:500;margin-bottom:8px}
 .sched{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0 16px;margin-top:8px}
 @media (max-width:600px){.imphead{grid-template-columns:auto minmax(0,1fr)}.imphead .meta{grid-column:1/-1}}
+.renum{margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.renum p{margin:0;flex:1 1 300px}
