@@ -35,6 +35,10 @@ insert into admins (user_id) select id from auth.users where email = 'you@exampl
 
 Once you've done that, a **Stats** link appears in the menu for you and nobody else. It shows accounts, readers, authors, people active this week, and new sign-ups per day.
 
+## Importing a book
+
+Authors can bring in a story they've already written from **Write > Import a whole book**, or the **Import chapters** button on their own story page. They upload a Word file (.docx) or paste the text, and Salvo splits it at lines like "Chapter 1", "Prologue" or "Epilogue" (or at Word's Heading styles). They check and fix every chapter before posting, then publish them all at once or release them on a schedule. It uses the existing chapters table; run `supabase/2026-11-27-import.sql` once so a whole book fits under the hourly posting limit.
+
 ## Moderation
 
 Reports go to the `reports` table. To take something down, set `hidden = true` on the story, chapter or comment in Supabase's Table Editor.

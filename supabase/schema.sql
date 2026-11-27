@@ -254,7 +254,7 @@ begin
   elsif tg_table_name = 'chapters' then
     select count(*) into n from chapters c join stories s on s.id = c.story_id
       where s.author_id = auth.uid() and c.created_at > now() - interval '1 hour';
-    if n >= 20 then raise exception 'You can post up to 20 chapters an hour.'; end if;
+    if n >= 200 then raise exception 'You can post up to 200 chapters an hour.'; end if;
   elsif tg_table_name = 'reports' then
     select count(*) into n from reports where reporter_id = auth.uid() and created_at > now() - interval '1 hour';
     if n >= 10 then raise exception 'Too many reports in an hour. Please try again later.'; end if;
@@ -438,7 +438,7 @@ begin
   elsif tg_table_name = 'chapters' then
     select count(*) into n from chapters c join stories s on s.id = c.story_id
       where s.author_id = auth.uid() and c.created_at > now() - interval '1 hour';
-    if n >= 20 then raise exception 'You can post up to 20 chapters an hour.'; end if;
+    if n >= 200 then raise exception 'You can post up to 200 chapters an hour.'; end if;
   elsif tg_table_name = 'reports' then
     select count(*) into n from reports where reporter_id = auth.uid() and created_at > now() - interval '1 hour';
     if n >= 10 then raise exception 'Too many reports in an hour. Please try again later.'; end if;

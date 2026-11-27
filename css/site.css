@@ -159,3 +159,24 @@ footer a{color:inherit}
 .libitem{display:grid;gap:6px}
 .libitem .cont{justify-self:start}
 .pill.feat{align-self:center;background:#2f6f4f;color:#fff;padding:6px 12px}
+/* Bulk import */
+.imp .lede{max-width:70ch}
+.imp label{margin-bottom:14px}
+.drop{border:2px dashed var(--line);border-radius:8px;padding:22px;text-align:center;cursor:pointer;background:var(--card);gap:4px}
+.drop:hover,.drop:focus-within{border-color:var(--sig)}
+.drop input{margin-top:8px}
+.drop.busy{opacity:.6;pointer-events:none}
+.impchs{display:grid;gap:10px;margin-top:16px}
+.impch{border:1px solid var(--line);border-left:4px solid var(--olive);border-radius:8px;padding:12px 14px;background:var(--card);display:grid;gap:8px}
+.impch.off{opacity:.55;border-left-color:var(--line)}
+.impch.bad{border-left-color:var(--sig)}
+.imphead{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center}
+.imp .imphead label.inc{display:flex;gap:6px;align-items:center;margin:0;white-space:nowrap;font-weight:700}
+.imphead input[type=checkbox],.radio input{width:auto}
+.impch details summary{cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.impch details textarea{margin-top:8px}
+.impsplit{align-items:center;margin-top:8px}
+.warn{color:var(--sig);font-weight:600;font-size:14px;margin:0}
+.imp .radio{display:flex;gap:8px;align-items:center;font-weight:500;margin-bottom:8px}
+.sched{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0 16px;margin-top:8px}
+@media (max-width:600px){.imphead{grid-template-columns:auto minmax(0,1fr)}.imphead .meta{grid-column:1/-1}}

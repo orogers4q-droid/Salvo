@@ -1,4 +1,4 @@
-// Salvo front end: hash routes (#home, #story-ID, #read-ID-N, #library, #write, #signin, #adfree).
+// Salvo front end: hash routes (#home, #story-ID, #read-ID-N, #library, #write, #import, #import-ID, #signin, #adfree).
 (function () {
   const TAGS = ["Military sci-fi", "Dark fantasy", "Space marines", "Naval", "Mech", "Drop troops", "LitRPG", "Fantasy war", "Alt history", "Hard sci-fi"];
   const PALS = [["#1d2a44", "#e4572e", "#9aa7b8"], ["#3a2a1c", "#d9a441", "#c9b79a"], ["#0f2b2e", "#5fb3a1", "#a8c3bd"], ["#2b2240", "#e46f9a", "#b7a8d1"], ["#33361e", "#c8d35a", "#c2c4a0"]];
@@ -97,7 +97,7 @@
     }
     return `<section class="band"><div class="wrap sgrid">${cover(st)}<div><h1 class="page">${esc(st.title)}</h1><div class="meta">by ${esc(st.author)} · ${k(st.followers)} followers · updated ${ago(st.ago)}${ratingLine}</div>${tagHtml(st)}<p class="blurb">${esc(st.blurb)}</p>
     ${rateBox}
-    <div class="row gap">${pub.length ? `<a class="btn" href="#read-${st.id}-${next}">${last ? "Continue, chapter " + next : "Read chapter 1"}</a>` : ""}<button class="btn ghost" id="follow">${fol ? "Following" : "Follow"}</button>${support}${me && me.admin && DB.setFeatured ? (isFeat ? `<span class="pill feat">Featured on home page</span><button class="btn ghost" id="unfeature">Back to my book</button>` : `<button class="btn ghost" id="feature" data-id="${st.id}">Feature on home page</button>`) : ""}${st.mine ? `<a class="btn ghost" href="#write">Post a chapter</a><label class="btn ghost filebtn">${st.coverUrl ? "Change cover" : "Add a cover"}<input type="file" id="coverfile" accept="image/*" data-id="${st.id}"></label>` : `<button class="btn ghost" data-report="story" data-id="${st.id}">Report</button>`}</div>
+    <div class="row gap">${pub.length ? `<a class="btn" href="#read-${st.id}-${next}">${last ? "Continue, chapter " + next : "Read chapter 1"}</a>` : ""}<button class="btn ghost" id="follow">${fol ? "Following" : "Follow"}</button>${support}${me && me.admin && DB.setFeatured ? (isFeat ? `<span class="pill feat">Featured on home page</span><button class="btn ghost" id="unfeature">Back to my book</button>` : `<button class="btn ghost" id="feature" data-id="${st.id}">Feature on home page</button>`) : ""}${st.mine ? `<a class="btn ghost" href="#write">Post a chapter</a><a class="btn ghost" href="#import-${st.id}">Import chapters</a><label class="btn ghost filebtn">${st.coverUrl ? "Change cover" : "Add a cover"}<input type="file" id="coverfile" accept="image/*" data-id="${st.id}"></label>` : `<button class="btn ghost" data-report="story" data-id="${st.id}">Report</button>`}</div>
     ${st.mine && st.chapters.some((c) => c.views != null) ? `<p class="meta">Views are visible to you only. Total: ${k(st.chapters.reduce((a, c) => a + (c.views || 0), 0))}</p>` : ""}
     ${supportForm}
     <h2>Chapters</h2>${st.chapters.map((c) => `<a class="chap ${sched[c.n] ? "sched" : ""}" href="#read-${st.id}-${c.n}"><span>${c.n}. ${esc(c.title)}${sched[c.n] ? ` <span class="pill">Scheduled · ${esc(fmtWhen(sched[c.n]))}</span>` : c.n <= last ? ' <span class="meta">· read</span>' : ""}</span><span class="meta num">${c.views != null && !sched[c.n] ? k(c.views) + " views · " : ""}${Math.max(1, Math.round(c.words / 230))} min</span></a>`).join("") || '<p class="note">No chapters yet.</p>'}
@@ -146,8 +146,18 @@
     const mine = await DB.myStories();
     return `<section class="band"><div class="wrap">${H1("Author dashboard")}<p class="meta">Writing as ${esc(me.pen)} · <a href="#signin">Change pen name</a></p><div class="two">
     <form id="sform"><h2>New story</h2><label>Title<input id="stitle" required maxlength="80"></label><label>Blurb<textarea id="sblurb" class="short" required maxlength="400"></textarea></label><label>Cover image <span class="meta">(optional, you can add or change it later)</span><input type="file" id="scover" accept="image/*"></label><fieldset><legend>Tags</legend><div class="checks">${TAGS.map((t, i) => `<label><input type="checkbox" value="${esc(t)}" id="tg${i}"> ${esc(t)}</label>`).join("")}</div></fieldset><button class="btn" type="submit">Create story</button></form>
-    <form id="chform"><h2>Post a chapter</h2>${mine.length ? `<label>Story<select id="cstory">${mine.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join("")}</select></label><label>Chapter title<input id="ctitle" required maxlength="100"></label><label>Chapter text<textarea id="cbody" class="tall" required maxlength="100000"></textarea></label><label>Publish at <span class="meta">(optional, leave empty to publish now)</span><input id="cwhen" type="datetime-local"></label><p class="note">Leave a blank line between paragraphs.</p><label>Author's note <span class="meta">(optional, shown after the chapter)</span><textarea id="cnote" class="short" maxlength="5000" placeholder="Thanks for reading! Next chapter Friday."></textarea></label><button class="btn" type="submit">Publish chapter</button>
+    <form id="chform"><h2>Post a chapter</h2>${mine.length ? `<p class="note"><b>Already written it?</b> <a href="#import">Import a whole book</a> from a Word file or pasted text, and Salvo splits it into chapters for you.</p><label>Story<select id="cstory">${mine.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join("")}</select></label><label>Chapter title<input id="ctitle" required maxlength="100"></label><label>Chapter text<textarea id="cbody" class="tall" required maxlength="100000"></textarea></label><label>Publish at <span class="meta">(optional, leave empty to publish now)</span><input id="cwhen" type="datetime-local"></label><p class="note">Leave a blank line between paragraphs.</p><label>Author's note <span class="meta">(optional, shown after the chapter)</span><textarea id="cnote" class="short" maxlength="5000" placeholder="Thanks for reading! Next chapter Friday."></textarea></label><button class="btn" type="submit">Publish chapter</button>
     <h2 class="mt">Your stories</h2>${mine.map((s) => `<a class="chap" href="#story-${s.id}"><span>${esc(s.title)}</span><span class="meta num">${s.chapterCount} ch · ${k(s.followers)} followers${s.views != null ? " · " + k(s.views) + " views" : ""}</span></a>`).join("")}` : '<p class="note">Create a story first, then post chapters to it here.</p>'}</form></div></div></section>`;
+  }
+
+  // Bulk import lives in js/import.js; this just hands it what it needs.
+  let impCtx = null;
+  async function importPage(storyId) {
+    if (!me) return signInFirst("import chapters");
+    if (!me.pen) return write();
+    const mine = await DB.myStories();
+    impCtx = { DB, mine, toast, storyId, refresh: async () => { impCtx.mine = await DB.myStories(); } };
+    return window.SalvoImport.page(impCtx);
   }
 
   function diagBox() {
@@ -221,6 +231,7 @@
     let v = "home", m, job;
     if ((m = h.match(/^read-(.+)-(\d+)$/))) { job = read(m[1], +m[2]); v = ""; }
     else if ((m = h.match(/^story-(.+)$/))) { job = story(m[1]); v = ""; }
+    else if (/^import(-.+)?$/.test(h)) { v = "write"; job = importPage(h.slice(7) || null); }
     else if (["library", "write", "signin", "adfree", "stats", "suggest", "inbox", "updates"].includes(h)) { v = h; job = { library, write, signin, adfree, stats, suggest, inbox, updates }[h](); }
     else job = home();
     document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("on", a.dataset.v === v));
@@ -244,6 +255,7 @@
   const busy = async (btn, fn) => { btn.disabled = true; try { await fn(); } catch (e) { toast(e.message); } finally { btn.disabled = false; } };
 
   function bind(m) {
+    if ($("impbody") && impCtx) window.SalvoImport.mount(impCtx);
     app.querySelectorAll(".chip").forEach((b) => (b.onclick = () => { filter = b.dataset.tag; render(); }));
     app.querySelectorAll("[data-report]").forEach((b) => (b.onclick = () => {
       if (!me) { location.hash = "#signin"; return; }
