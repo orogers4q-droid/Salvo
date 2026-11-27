@@ -249,8 +249,8 @@
         <label class="radio"><input type="radio" name="impmode" value="sched" ${state.mode === "sched" ? "checked" : ""}> Release them on a schedule</label>
         ${state.mode === "sched" ? `<div class="sched"><label>Publish this many now<input type="number" id="impnow" min="0" max="${inc.length}" value="${esc(state.firstNow)}"></label>
           <label>Then one chapter every<select id="impevery">${[[1, "day"], [2, "2 days"], [3, "3 days"], [7, "week"]].map(([v, t]) => `<option value="${v}" ${+state.every === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
-          <label>Starting<input type="datetime-local" id="impstart" value="${esc(state.start)}"></label></div>
-          ${(() => { const l = when.filter(Boolean); return l.length ? `<p class="note">${l.length} scheduled: the first on ${fmt(l[0])}, the last on ${fmt(l[l.length - 1])}. Readers see each one at its time.</p>` : ""; })()}` : ""}
+          <label>Starting<input type="datetime-local" id="impstart" min="${localInput(new Date()).slice(0, 10)}T00:00" max="2099-12-31T23:59" value="${esc(state.start)}"></label></div>
+          ${(() => { const l = when.filter(Boolean); if (l.length && (isNaN(l[0]) || l[0].getFullYear() > 2099)) return `<p class="warn">That start date isn't valid. Pick it with the calendar button, or retype it.</p>`; return l.length ? `<p class="note">${l.length === 1 ? "1 scheduled, for " + fmt(l[0]) : l.length + " scheduled: the first on " + fmt(l[0]) + ", the last on " + fmt(l[l.length - 1])}. Readers see each one at its time.</p>` : ""; })()}` : ""}
         <div class="row gap mt"><button class="btn" type="button" id="imppost" ${!inc.length || problems ? "disabled" : ""}>${state.mode === "now" ? "Publish" : "Post and schedule"} ${inc.length} chapter${inc.length === 1 ? "" : "s"}</button><button class="btn ghost" type="button" id="impreset">Start over</button></div>
         ${problems ? `<p class="warn">${problems} chapter${problems === 1 ? " needs" : "s need"} fixing first (marked in red above).</p>` : ""}
         <p class="meta" id="impprog" role="status"></p></div>`;
@@ -300,7 +300,9 @@
     const nw = document.getElementById("impnow"), ev = document.getElementById("impevery"), sd = document.getElementById("impstart");
     if (nw) { nw.oninput = () => { state.firstNow = nw.value; }; nw.onchange = later; }
     if (ev) ev.onchange = () => { state.every = +ev.value; later(); };
-    if (sd) { sd.oninput = () => { state.start = sd.value; }; sd.onchange = () => { state.start = sd.value; later(); }; }
+    // Redraw only when the date field is left: Chrome fires "change" after each typed part (month, day, hour),
+    // and redrawing mid-typing scrambled the date.
+    if (sd) { sd.oninput = sd.onchange = () => { if (sd.value) state.start = sd.value; }; sd.onblur = later; }
     const rn = document.getElementById("imprenum");
     if (rn) rn.onclick = () => { const st = ctx.mine.find((s) => s.id === state.storyId); const n = renumber(state.chapters, st.chapterCount + 1); redraw(); toast(n + " title" + (n === 1 ? "" : "s") + " renumbered"); };
     document.getElementById("impreset").onclick = () => { if (confirmReset()) { state = null; mount(ctx); } };
@@ -321,7 +323,8 @@
     const when = schedule();
     if (state.mode === "sched") {
       const l = when.filter(Boolean);
-      if (l.length && (isNaN(l[0]) || l[0] < new Date(Date.now() + 60000))) { toast("Pick a start time in the future"); return; }
+      if (l.length && (isNaN(l[0]) || l[0].getFullYear() > 2099)) { toast("That start date isn't valid. Pick it with the calendar button."); return; }
+      if (l.length && l[0] < new Date(Date.now() + 60000)) { toast("Pick a start time in the future"); return; }
     }
     const jobs = state.chapters.map((c, i) => ({ c, i })).filter((x) => x.c.include).map((x, k) => ({ ...x, at: when[k] }));
     const prog = document.getElementById("impprog");
